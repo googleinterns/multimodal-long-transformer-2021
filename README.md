@@ -1,9 +1,9 @@
 **This is not an officially supported Google product.**
 
-# Multimodal Transformer Models
+# Multimodal Long Transformer Models
 
 Repository for the Google summer 2021 internship project on multimodal
-Transformer models.
+Long Transformer models.
 
 ## Source Code Headers
 
