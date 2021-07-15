@@ -1,9 +1,8 @@
 import attr
 import tensorflow as tf
+import tensorflow_text as tf_text
 
 from typing import List
-
-from google_research.etcmodel.models.tokenization import FullTokenizer
 
 
 @attr.s
@@ -15,7 +14,7 @@ class PretrainInputConfig(object):
   text_keys = attr.ib(factory=List)
 
 
-def get_pretrain_example_decode_fn(tokenizer: FullTokenizer,
+def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
                                    input_config: PretrainInputConfig,
                                    is_training: bool):
   """Returns a decode function to parse a single example into Tensors."""
@@ -50,10 +49,7 @@ def get_pretrain_example_decode_fn(tokenizer: FullTokenizer,
 
     # Text
     for k in input_config.text_keys:
-      txt = example[k].numpy().decode('utf-8')
-      tokens = tokenizer.tokenize(txt)
-      ids = tokenizer.convert_tokens_to_ids(tokens)
-      example[k] = ids
+      example[k] = tokenizer.tokenize(txt)
 
     return example
 
