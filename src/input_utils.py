@@ -10,12 +10,21 @@ from google_research.etcmodel.models.modeling import EtcConfig
 @attr.s
 class PretrainInputConfig(object):
   """Config options for pretraining model input."""
-
+  
+  # Images of "image_size * imate_size" pixels.
   image_size = attr.ib(default=224)
+  
+  # The names of text fields we want to use in the input
   text_keys = attr.ib(factory=List)
+  
+  # Patches of "patch_size * patch_size" pixels.
   patch_size = attr.ib(default=16)
+  
+  # The order of Patches to feed into transformer.
   patch_order = attr.ib(default='raster_scan')
-  mlm_use_whole_word = attr.ib()  # type: bool
+  
+  # Whole word masking for masked language modeling.
+  mlm_use_whole_word = attr.ib(default=False)
 
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
@@ -50,7 +59,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
                                  sizes=[1, patch_size, patch_size, 1],
                                  strides=[1, patch_size, patch_size, 1],
                                  rates=[1, 1, 1, 1],
-                                 padding="VALID")
+                                 padding='VALID')
     im = tf.squeeze(im, axis=0)
     return im
 
