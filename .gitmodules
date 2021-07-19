@@ -1,3 +1,0 @@
-[submodule "google_research"]
-	path = src/google_research
-	url = https://github.com/google-research/google-research
