@@ -104,7 +104,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
                                   sizes=[1, patch_size, patch_size, 1],
                                   strides=[1, patch_size, patch_size, 1],
                                   rates=[1, 1, 1, 1],
-                                  padding="VALID")
+                                  padding='VALID')
     im = tf.squeeze(im, axis=0)
     return im
 
