@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import attr
-from typing import List
+from typing import Text, List
 
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -44,6 +44,12 @@ class PretrainInputConfig(object):
   # Whole word masking for masked language modeling.
   mlm_use_whole_word = attr.ib(default=False)
 
+  # The fraction of tokens to mask for masked language model loss.
+  mlm_fraction_to_mask = attr.ib(default=0.15)
+
+  # The fraction of tokens to mask for masked patch prediction loss.
+  mpp_fraction_to_mask = attr.ib(default=0.50)
+
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
                                    input_config: PretrainInputConfig,
@@ -66,7 +72,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     unused_token = f'[unused{i}]'.encode()
     unused_token_idx = vocab.index(unused_token)
     special_token_to_ragged_tensor[key] = ragged_full(
-        (1, 1, 1), tf.int32, unused_token_idx) 
+        (1, 1, 1), tf.int32, unused_token_idx)
 
   # We start from unused99 to make unused1 to unused98 flexible
   # The large index of unused toekns is 993
@@ -75,8 +81,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
   patch_start_idx = vocab.index(patch_start_token)
 
   patch_ids_tensor = tf.expand_dims(
-      tf.range(patch_start_idx, num_patch_per_row**2+patch_start_idx),
-      axis=1)
+      tf.range(patch_start_idx, num_patch_per_row**2+patch_start_idx), axis=1)
   patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
@@ -152,15 +157,20 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     # Concatenate all input token ids together by the following ordering:
     # [CLS] [PATCH] patch1 patch2 ... [ATTRIBUTION] w_ATT1 w_ATT2 ...
     # [REFERENCE] w_REF1 w_REF2 ... [ALT_TEXT] w_ALT1 w_ALT2 ... [SEP]
-    input_ids = [special_token_to_ragged_tensor['cls'],
-                 special_token_to_ragged_tensor['patch'],
-                 patch_ids_tensor]
-    for k in input_config.text_keys:
-      input_ids.append(special_token_to_ragged_tensor[key])
-      input_ids.append(example[key])
-    input_ids.append(special_token_to_ragged_tensor['sep'])
+    image_input_ids = [special_token_to_ragged_tensor['cls'],
+                       special_token_to_ragged_tensor['patch'],
+                       patch_ids_tensor]
+    image_input_ids = tf.squeeze(tf.concat(image_input_ids, axis=1), axis=0)
+    image_input_ids = tf.RaggedTensor.from_tensor(image_input_ids)
+    example['image_input_ids'] = image_input_ids
 
-    example['input_ids'] = tf.concat(input_ids, axis=1)
+    text_input_ids = []
+    for k in input_config.text_keys:
+      text_input_ids.append(special_token_to_ragged_tensor[k])
+      text_input_ids.append(example[k])
+    text_input_ids.append(special_token_to_ragged_tensor['sep'])
+    text_input_ids = tf.squeeze(tf.concat(text_input_ids, axis=1), axis=0)
+    example['text_input_ids'] = text_input_ids
 
     return example
 
