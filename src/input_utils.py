@@ -44,11 +44,17 @@ class PretrainInputConfig(object):
   # Whole word masking for masked language modeling.
   mlm_use_whole_word = attr.ib(default=False)
 
-  # The fraction of tokens to mask for masked language model loss.
+  # The fraction of tokens to mask for masked language model (mlm) loss.
   mlm_fraction_to_mask = attr.ib(default=0.15)
 
-  # The fraction of tokens to mask for masked patch prediction loss.
+  # The fraction of tokens to mask for masked patch prediction (mpp) loss.
   mpp_fraction_to_mask = attr.ib(default=0.50)
+
+  # The maximum number of masked text tokens per batch.
+  mlm_max_selections_per_batch = attr.ib(default=480)
+  
+  # The maximum number of masked patch tokens per batch.
+  mpp_max_selections_per_batch = attr.ib(default=1600)
 
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,

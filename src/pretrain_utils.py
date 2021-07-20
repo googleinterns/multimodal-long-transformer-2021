@@ -52,7 +52,8 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
       selection_rate=input_config.mpp_fraction_to_mask,
       unselectable_ids=unselectable_ids)
 
-  mask_values_chooser = tf_text.MaskValuesChooser(len(vocab), mask_token_id, 0.8)
+  mask_values_chooser = tf_text.MaskValuesChooser(len(vocab),
+                                                  mask_token_id, 0.8)
   num_patch_per_row = input_config.image_size // input_config.patch_size
 
   def make_masked_lm_features(features: Mapping[Text, tf.Tensor]):
