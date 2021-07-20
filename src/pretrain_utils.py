@@ -32,7 +32,10 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
 
   vocab = tokenizer._wordpiece_tokenizer._get_vocab_and_ids()[0]
   vocab = vocab.numpy().tolist()
-  # [PATCH] is b'[unused0]'
+  
+  # Unused tokens are used as special tokens that indicate the types of 
+  # subsequences. For example, [unused0] is for [PATCH] which will be 
+  # added prior to the sequence of patch tokens.
   unselectable_tokens = [b'[CLS]', b'[SEP]', b'[unused0]']
   unselectable_tokens += [f'[unused{i}]'.encode() 
                           for i in range(1, len(input_config.text_keys)+1)]
@@ -40,16 +43,16 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
   mask_token_id = vocab.index(b'[MASK]')
 
   text_item_selector = tf_text.RandomItemSelector(
-      max_selections_per_batch=30,
+      max_selections_per_batch=input_config.mlm_max_selections_per_batch,
       selection_rate=input_config.mlm_fraction_to_mask,
       unselectable_ids=unselectable_ids)
 
   image_item_selector = tf_text.RandomItemSelector(
-      max_selections_per_batch=30,
+      max_selections_per_batch=input_config.mpp_max_selections_per_batch,
       selection_rate=input_config.mpp_fraction_to_mask,
       unselectable_ids=unselectable_ids)
 
-  mask_values_chooser = tf_text.MaskValuesChooser(30522, mask_token_id, 0.8)
+  mask_values_chooser = tf_text.MaskValuesChooser(len(vocab), mask_token_id, 0.8)
   num_patch_per_row = input_config.image_size // input_config.patch_size
 
   def make_masked_lm_features(features: Mapping[Text, tf.Tensor]):
