@@ -29,13 +29,13 @@ _PATCH_START_UNUSED_INDEX = 99
 class PretrainInputConfig(object):
   """Config options for pretraining model input."""
 
-  # Images of "image_size * imate_size" pixels.
+  # Images of image_size * imate_size pixels.
   image_size = attr.ib(default=224)
 
   # The names of text fields we want to use in the input
   text_keys = attr.ib(factory=List)
 
-  # Patches of "patch_size * patch_size" pixels.
+  # Patches of patch_size * patch_size pixels.
   patch_size = attr.ib(default=16)
 
   # The order of Patches to feed into transformer.
@@ -50,11 +50,14 @@ class PretrainInputConfig(object):
   # The fraction of tokens to mask for masked patch prediction (mpp) loss.
   mpp_fraction_to_mask = attr.ib(default=0.50)
 
-  # The maximum number of masked text tokens per batch.
+  # Maximum number of masked text tokens per batch.
   mlm_max_selections_per_batch = attr.ib(default=480)
-  
-  # The maximum number of masked patch tokens per batch.
+
+  # Maximum number of masked patch tokens per batch.
   mpp_max_selections_per_batch = attr.ib(default=1600)
+
+  # Maximum input sequence length (image+text) after WordPiece tokenization.
+  max_seq_len = attr.ib(default=512)
 
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
@@ -65,6 +68,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
 
   image_size = input_config.image_size
   patch_size = input_config.patch_size
+  max_seq_len = input_config.max_seq_len
   num_patch_per_row = image_size // patch_size
   vocab = tokenizer._wordpiece_tokenizer._get_vocab_and_ids()[0]
   vocab = vocab.numpy().tolist()
@@ -91,6 +95,11 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
   patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
+  # -2 is for [CLS] and [PATCH]; -1 is for [SEP] at the end of the sequence
+  max_text_seq_len = (max_seq_len - 2 - num_patch_per_row**2 -
+                      len(input_config.text_keys) - 1)
+  trimmer = tf_text.RoundRobinTrimmer(max_seq_length=[max_text_seq_len])
+
   name_to_features = {'image_data': tf.io.FixedLenFeature([], tf.string)}
   for k in input_config.text_keys:
     name_to_features[k] = tf.io.FixedLenFeature(
@@ -98,10 +107,8 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
 
   def convert_image_to_patches(im):
     """Convert an image to patches (token embeddings).
-
     Args:
       im: <float32>[height, width, num_channels].
-
     Returns:
       <float32>[num_patch_per_row, num_patch_per_row, 3*(patch_size**2)].
     """
@@ -116,11 +123,9 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
 
   def reorder_patches(im, mode='raster_scan'):
     """Reorder the patch order of a iamge.
-
     Args:
       im: <float32>[num_patch_per_row, num_patch_per_row, 3*(patch_size**2)].
       mode: Mode of reordering.
-
     Returns:
       <float32>[num_patch_per_row**2, 3*(patch_size**2)].
     """
@@ -128,6 +133,9 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       return tf.reshape(im, [num_patch_per_row**2, (patch_size**2)*3])
     else:
       raise ValueError(f'Reordering mode ({mode}) is not available.')
+
+  def get_num_wordpieces(t):
+    return int(tf.shape(t.merge_dims(-2, -1)))
 
   def _decode_fn(record):
     example = tf.io.parse_single_example(record, name_to_features)
@@ -155,14 +163,9 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     im = reorder_patches(im, mode=input_config.patch_order)
     example['image_data'] = im
 
-    # Text
-    text_len = 0
-    for k in input_config.text_keys:
-      example[k] = tokenizer.tokenize(example[k])
-
     # Concatenate all input token ids together by the following ordering:
     # [CLS] [PATCH] patch1 patch2 ... [ATTRIBUTION] w_ATT1 w_ATT2 ...
-    # [REFERENCE] w_REF1 w_REF2 ... [ALT_TEXT] w_ALT1 w_ALT2 ... [SEP]
+    # [REFERENCE] w_REF1 w_REF2 ... [ALT_TEXT] w_ALT1 w_ALT2 ... [SEP].
     image_input_ids = [special_token_to_ragged_tensor['cls'],
                        special_token_to_ragged_tensor['patch'],
                        patch_ids_tensor]
@@ -170,13 +173,39 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     image_input_ids = tf.RaggedTensor.from_tensor(image_input_ids)
     example['image_input_ids'] = image_input_ids
 
+    # Text
+    for k in input_config.text_keys:
+      example[k] = tokenizer.tokenize(example[k])
+
     text_input_ids = []
     for k in input_config.text_keys:
-      text_input_ids.append(special_token_to_ragged_tensor[k])
       text_input_ids.append(example[k])
+    text_input_ids = trimmer.trim(text_input_ids)
+
+    # Create text_input_ids 
+    # Firstly, insert a special token prior to each text source
+    for i, k in enumerate(input_config.text_keys):
+      s = special_token_to_ragged_tensor[k]
+      text_input_ids.insert(i*2, s)
     text_input_ids.append(special_token_to_ragged_tensor['sep'])
     text_input_ids = tf.squeeze(tf.concat(text_input_ids, axis=1), axis=0)
     example['text_input_ids'] = text_input_ids
+
+    # Total sequence length: image + text
+    num_image_wordpieces = 2 + num_patch_per_row**2
+    num_text_wordpieces = get_num_wordpieces(text_input_ids)
+    seq_len = num_image_wordpieces + num_text_wordpieces
+    rest_len = max_seq_len - seq_len
+
+    # Create segment_ids
+    segment_ids = [tf.ones(num_image_wordpieces, dtype=tf.int32),
+                   tf.ones(num_text_wordpieces, dtype=tf.int32)*2,
+                   tf.zeros(rest_len, dtype=tf.int32)]
+    example['segment_ids'] = tf.concat(segment_ids, axis=0)
+
+    # Create input_mask
+    helper = tf.range(max_seq_len)
+    example['input_mask'] = tf.where(helper < seq_len, 1, 0)
 
     return example
 
