@@ -85,13 +85,14 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
         (1, 1, 1), tf.int32, unused_token_idx)
 
   # We start from unused99 to make unused1 to unused98 flexible
-  # The large index of unused toekns is 993
+  # The large index of unused tokens is 993
   # Make sure the number of patches is lower than 895
   patch_start_token = f'[unused{_PATCH_START_UNUSED_INDEX}]'.encode()
   patch_start_idx = vocab.index(patch_start_token)
 
   patch_ids_tensor = tf.expand_dims(
-      tf.range(patch_start_idx, num_patch_per_row**2+patch_start_idx), axis=1)
+      tf.range(patch_start_idx, num_patch_per_row**2 + patch_start_idx),
+               axis=1)
   patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
@@ -122,7 +123,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     return im
 
   def reorder_patches(im, mode='raster_scan'):
-    """Reorder the patch order of a iamge.
+    """Reorder the patch order of a image.
     Args:
       im: <float32>[num_patch_per_row, num_patch_per_row, 3*(patch_size**2)].
       mode: Mode of reordering.
