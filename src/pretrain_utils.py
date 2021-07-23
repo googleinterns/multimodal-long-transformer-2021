@@ -78,7 +78,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
     channels = get_shape_list(patch_tokens)[-1] // (patch_size**2)
     bin_size = max_pixel_val // (2 ** output_channel_bits)
 
-    patch_tokens = patch_tokens * (max_pixel_val-1)
+    patch_tokens = patch_tokens * (max_pixel_val - 1)
     avg_target = reduce(
         patch_tokens,
         'batch seq_len (p2 channels) -> batch (seq_len channels)',
