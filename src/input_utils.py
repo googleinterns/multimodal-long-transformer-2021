@@ -87,11 +87,10 @@ class RelativeTransformerSideInputs(object):
       return dict(self.__dict__)
 
 
-def get_pretrain_example_decode_fn(
-  tokenizer: tf_text.BertTokenizer,
-  nput_config: PretrainInputConfig,
-  odel_config: EtcConfig,
-  s_training: bool):
+def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
+                                   input_config: PretrainInputConfig,
+                                   model_config: EtcConfig,
+                                   is_training: bool):
   """Returns a decode function to parse a single example into Tensors."""
 
   image_size = input_config.image_size
