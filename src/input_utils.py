@@ -17,10 +17,11 @@ from typing import List, Optional, Mapping
 import attr
 import tensorflow as tf
 import tensorflow_text as tf_text
+from official.modeling import tf_utils
 
-from tf_utils import get_shape_list
-from feature_utils import make_segmented_att_mask
 from tensor_utils import full, ragged_full
+from etcmodel import tensor_utils as etc_tensor_utils
+from etcmodel import feature_utils as etc_feature_utils
 from etcmodel.models.modeling import EtcConfig 
 
 
@@ -163,7 +164,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       raise ValueError(f'Reordering mode ({mode}) is not available.')
 
   def get_num_wordpieces(t):
-    return get_shape_list(t.merge_dims(-2, -1))[0]
+    return tf_utils.get_shape_list(t.merge_dims(-2, -1))[0]
 
   def _decode_fn(record):
     example = tf.io.parse_single_example(record, name_to_features)
@@ -232,7 +233,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
 def make_relative_transformer_side_inputs(
   long_breakpoints: tf.Tensor,
   relative_pos_max_distance: int,
-  name: Optional[Text] = None) -> RelativeTransformerSideInputs:
+  name: Optional[str] = None) -> RelativeTransformerSideInputs:
   """Makes relative transformer side input tensors
 
   Args:
@@ -251,13 +252,13 @@ def make_relative_transformer_side_inputs(
     long_breakpoints = tf.convert_to_tensor(long_breakpoints)
     long_example_ids = tf.cumsum(long_breakpoints, axis=-1, reverse=True)
     long_example_ids = tf.convert_to_tensor(long_example_ids)
-    long_seq_len = get_shape_list(long_example_ids)[1]
-    att_mask = make_segmented_att_mask(long_example_ids)
+    long_seq_len = tf_utils.get_shape_list(long_example_ids)[1]
+    att_mask = etc_feature_utils.make_segmented_att_mask(long_example_ids)
     batch_size = tf.shape(long_example_ids)[0]
 
     relative_att_ids = None
     if relative_pos_max_distance > 0:
-      relative_pos_generator = RelativePositionGenerator(
+      relative_pos_generator = etc_feature_utils.RelativePositionGenerator(
           relative_pos_max_distance)
       relative_att_ids = relative_pos_generator.make_relative_att_ids(
           seq_len=long_seq_len,
@@ -271,7 +272,7 @@ def make_relative_transformer_side_inputs(
 def add_side_input_features(
   input_config: PretrainInputConfig,
   model_config: EtcConfig,
-  features: Mapping[Text, tf.Tensor]) -> Mapping[Text, tf.Tensor]:
+  features: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
   """Replaces raw input features with derived ETC side inputs.
 
   This function is meant to be called as part of a Dataset pipeline.
@@ -291,7 +292,7 @@ def add_side_input_features(
   txt_wp = features['num_text_wordpieces']
   seq_len = tf.math.add(img_wp, txt_wp)
   max_seq_len_in_batch = tf.reduce_max(seq_len)
-  batch_size = get_shape_list(img_wp)[0]
+  batch_size = tf_utils.get_shape_list(img_wp)[0]
 
   img_wp = img_wp[:, tf.newaxis]
   txt_wp = txt_wp[:, tf.newaxis]

@@ -16,9 +16,11 @@ import functools
 from typing import Mapping, List
 
 import attr
+from einops import reduce, rearrange
 import tensorflow as tf
 import tensorflow_text as tf_text
 from tensorflow.python.ops import math_ops
+from official.modeling import tf_utils
 
 from etcmodel.models.modeling import EtcConfig 
 from input_utils import (PretrainInputConfig,
@@ -42,7 +44,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
   vocab = tokenizer._wordpiece_tokenizer._get_vocab_and_ids()[0]
   vocab = vocab.numpy().tolist()
 
-  # Unused tokens are used as special tokens that indicate the types of
+  # Unused tokens are used as special tokens that indicate the types of 
   # subsequences. For example, [unused0] is for [PATCH] which will be 
   # added prior to the sequence of patch tokens.
   unselectable_tokens = [b'[CLS]', b'[SEP]', b'[unused0]']
@@ -75,7 +77,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
       <tf.Tensor>[batch, sequence_length]
     """
 
-    channels = get_shape_list(patch_tokens)[-1] // (patch_size**2)
+    channels = tf_utils.get_shape_list(patch_tokens)[-1] // (patch_size**2)
     bin_size = max_pixel_val // (2 ** output_channel_bits)
 
     patch_tokens = patch_tokens * (max_pixel_val - 1)
@@ -127,14 +129,14 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
 
     # Offset -2 position indices: [CLS] and [PATCH] tokens.
     _img_masked_positions = (img_masked_positions - 2).to_tensor()
-    batch_size, masked_seq_len = get_shape_list(_img_masked_positions)
+    batch_size, masked_seq_len = tf_utils.get_shape_list(_img_masked_positions)
     _img_masked_positions = tf.cast(_img_masked_positions, tf.int32)
-    hs = get_shape_list(features['image_data'])[2]
+    hs = tf_utils.get_shape_list(features['image_data'])[2]
     masked_patch_tensor = gather_indexes(features['image_data'],
                                          _img_masked_positions)
     masked_patch_tensor = tf.reshape(masked_patch_tensor,
                                      [batch_size, masked_seq_len, hs])
-    
+
     # Create label for masked patches
     features['masked_patch_target'] = make_masked_patch_prediction_target(
         masked_patch_tensor)
@@ -148,13 +150,13 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
         text_input_ids, text_item_selector, mask_values_chooser, axis=1)
     txt_masked_input_ids, txt_masked_positions, txt_masked_ids = txt_features
     features['masked_text_target'] = txt_masked_ids
-      
+
     # Offset text positions after image ones ([CLS] [PATCH] P1 p2 ... P196).
     txt_masked_positions = txt_masked_positions + 2 + num_patch_per_row ** 2
 
     # Join
     masked_input_ids = tf.concat([img_masked_input_ids, txt_masked_input_ids],
-                                  axis=1)
+                                 axis=1)
     masked_positions = tf.concat([img_masked_positions, txt_masked_positions],
                                  axis=1)
     masked_ids = tf.concat([img_masked_ids, txt_masked_ids], axis=1)
