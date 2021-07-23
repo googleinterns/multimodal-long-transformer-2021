@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import attr
-from typing import Text, Mapping, List
+from typing import Mapping, List
 
+import attr
 import tensorflow as tf
 import tensorflow_text as tf_text
 
@@ -56,7 +56,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
                                                   mask_token_id, 0.8)
   num_patch_per_row = input_config.image_size // input_config.patch_size
 
-  def make_masked_lm_features(features: Mapping[Text, tf.Tensor]):
+  def make_masked_lm_features(features: Mapping[str, tf.Tensor]):
     """Randomly mask out tokens
     Args:
       features: A dictionary of Tensor features, crucially including
