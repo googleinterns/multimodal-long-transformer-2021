@@ -19,11 +19,10 @@ import tensorflow as tf
 import tensorflow_text as tf_text
 from official.modeling import tf_utils
 
-from tensor_utils import full, ragged_full
+import tensor_utils
+from etcmodel.models import modeling
 from etcmodel import tensor_utils as etc_tensor_utils
 from etcmodel import feature_utils as etc_feature_utils
-from etcmodel.models.modeling import EtcConfig 
-
 
 _PATCH_START_UNUSED_INDEX = 99
 
@@ -58,7 +57,7 @@ class PretrainInputConfig(object):
 
   # Maximum number of masked text tokens per batch.
   mlm_max_selections_per_batch = attr.ib(default=480)
-
+  
   # Maximum number of masked patch tokens per batch.
   mpp_max_selections_per_batch = attr.ib(default=1600)
 
@@ -80,7 +79,7 @@ class RelativeTransformerSideInputs(object):
   att_mask = attr.ib()  # type: Optional[tf.Tensor]
   relative_att_ids = attr.ib()  # type: Optional[tf.Tensor]
 
-  def to_dict(self, exclude_none_values=False):
+  def to_dict(self, exclude_none_values=True):
     """Returns attributes in a Python dictionary."""
     if exclude_none_values:
       return {k: v for k, v in self.__dict__.items() if v is not None}
@@ -90,7 +89,7 @@ class RelativeTransformerSideInputs(object):
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
                                    input_config: PretrainInputConfig,
-                                   model_config: EtcConfig,
+                                   model_config: modeling.EtcConfig,
                                    is_training: bool):
   """Returns a decode function to parse a single example into Tensors."""
 
@@ -102,8 +101,10 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
   vocab = vocab.numpy().tolist()
 
   special_token_to_ragged_tensor = {
-      'cls': ragged_full((1, 1, 1), tf.int32, vocab.index(b'[CLS]')),
-      'sep': ragged_full((1, 1, 1), tf.int32, vocab.index(b'[SEP]')),
+      'cls': 
+          tensor_utils.ragged_full((1, 1, 1), tf.int32, vocab.index(b'[CLS]')),
+      'sep':
+          tensor_utils.ragged_full((1, 1, 1), tf.int32, vocab.index(b'[SEP]')),
   }
 
   for i, key in enumerate(['patch'] + input_config.text_keys):
@@ -201,7 +202,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     image_input_ids = tf.squeeze(tf.concat(image_input_ids, axis=1), axis=0)
     image_input_ids = tf.RaggedTensor.from_tensor(image_input_ids)
     example['image_input_ids'] = image_input_ids
-
+    
     # Text
     for k in input_config.text_keys:
       example[k] = tokenizer.tokenize(example[k])
@@ -211,7 +212,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       text_input_ids.append(example[k])
       example.pop(k)
     text_input_ids = trimmer.trim(text_input_ids)
-
+    
     # Create text_input_ids 
     # Firstly, insert a special token prior to each text source
     for i, k in enumerate(input_config.text_keys):
@@ -251,11 +252,10 @@ def make_relative_transformer_side_inputs(
   with tf.name_scope(name or 'make_relative_transformer_side_inputs'):
     long_breakpoints = tf.convert_to_tensor(long_breakpoints)
     long_example_ids = tf.cumsum(long_breakpoints, axis=-1, reverse=True)
-    long_example_ids = tf.convert_to_tensor(long_example_ids)
     long_seq_len = tf_utils.get_shape_list(long_example_ids)[1]
     att_mask = etc_feature_utils.make_segmented_att_mask(long_example_ids)
-    batch_size = tf.shape(long_example_ids)[0]
-
+    batch_size = tf_utils.get_shape_list(long_example_ids)[0]
+  
     relative_att_ids = None
     if relative_pos_max_distance > 0:
       relative_pos_generator = etc_feature_utils.RelativePositionGenerator(
@@ -263,7 +263,7 @@ def make_relative_transformer_side_inputs(
       relative_att_ids = relative_pos_generator.make_relative_att_ids(
           seq_len=long_seq_len,
           batch_size=batch_size)
-
+  
     return RelativeTransformerSideInputs(
         att_mask=att_mask,
         relative_att_ids=relative_att_ids)
@@ -271,7 +271,7 @@ def make_relative_transformer_side_inputs(
 
 def add_side_input_features(
   input_config: PretrainInputConfig,
-  model_config: EtcConfig,
+  model_config: modeling.EtcConfig,
   features: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
   """Replaces raw input features with derived ETC side inputs.
 
@@ -296,15 +296,15 @@ def add_side_input_features(
 
   img_wp = img_wp[:, tf.newaxis]
   txt_wp = txt_wp[:, tf.newaxis]
-  helper = tf.range(max_seq_len_in_batch, dtype=tf.int32)
-  img_segment = tf.where(helper < img_wp, 1, 0)
+  position = tf.range(max_seq_len_in_batch, dtype=tf.int32)
+  img_segment = tf.where(position < img_wp, 1, 0)
 
-  txt_segment_mask = (helper > img_wp) & (helper < img_wp + txt_wp)
+  txt_segment_mask = (position > img_wp) & (position < img_wp + txt_wp)
   txt_segment = tf.where(txt_segment_mask, 2, 0)
 
   segment_ids = img_segment + txt_segment
   features['segment_ids'] = segment_ids
-
+  
   # seq_len-1 because we need the indices
   features['long_breakpoints'] = tf.one_hot(
       seq_len-1, depth=max_seq_len_in_batch,
