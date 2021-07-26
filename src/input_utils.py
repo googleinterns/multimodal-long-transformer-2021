@@ -290,7 +290,7 @@ def add_side_input_features(
 
   img_wp = features['num_image_wordpieces']
   txt_wp = features['num_text_wordpieces']
-  seq_len = tf.math.add(img_wp, txt_wp)
+  seq_len = img_wp + txt_wp
   max_seq_len_in_batch = tf.reduce_max(seq_len)
   batch_size = tf_utils.get_shape_list(img_wp)[0]
 
