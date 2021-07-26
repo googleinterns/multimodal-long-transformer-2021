@@ -12,17 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Mapping
+from typing import Text, List
 
 import attr
 import tensorflow as tf
 import tensorflow_text as tf_text
-from official.modeling import tf_utils
 
+from google_research.etcmodel.models.modeling import EtcConfig 
 from tensor_utils import full, ragged_full
-from etcmodel import tensor_utils as etc_tensor_utils
-from etcmodel import feature_utils as etc_feature_utils
-from etcmodel.models.modeling import EtcConfig 
 
 
 _PATCH_START_UNUSED_INDEX = 99
@@ -35,17 +32,14 @@ class PretrainInputConfig(object):
   # Images of image_size * imate_size pixels.
   image_size = attr.ib(default=224)
 
+  # The names of text fields we want to use in the input
+  text_keys = attr.ib(factory=List)
+
   # Patches of patch_size * patch_size pixels.
   patch_size = attr.ib(default=16)
 
   # The order of Patches to feed into transformer.
   patch_order = attr.ib(default='raster_scan')
-
-  # Maximum pixel value.
-  max_pixel_val = attr.ib(default=256) 
-
-  # The names of text fields we want to use in the input
-  text_keys = attr.ib(factory=List)
 
   # Whole word masking for masked language modeling.
   mlm_use_whole_word = attr.ib(default=False)
@@ -62,30 +56,8 @@ class PretrainInputConfig(object):
   # Maximum number of masked patch tokens per batch.
   mpp_max_selections_per_batch = attr.ib(default=1600)
 
-  # Maximum output channel bits in masked patch prediction.
-  output_channel_bits = attr.ib(default=3)
-
   # Maximum input sequence length (image+text) after WordPiece tokenization.
   max_seq_len = attr.ib(default=512)
-
-
-@attr.s
-class RelativeTransformerSideInputs(object):
-  """RelativeTransformer side inputs ("att_mask" and "relative_att_ids").
-
-  See `RelativeTransformerLayers.call()` for a description of these side
-  inputs.
-  """
-
-  att_mask = attr.ib()  # type: Optional[tf.Tensor]
-  relative_att_ids = attr.ib()  # type: Optional[tf.Tensor]
-
-  def to_dict(self, exclude_none_values=False):
-    """Returns attributes in a Python dictionary."""
-    if exclude_none_values:
-      return {k: v for k, v in self.__dict__.items() if v is not None}
-    else:
-      return dict(self.__dict__)
 
 
 def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
@@ -120,7 +92,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
 
   patch_ids_tensor = tf.expand_dims(
       tf.range(patch_start_idx, num_patch_per_row**2 + patch_start_idx),
-      axis=1)
+               axis=1)
   patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
@@ -164,7 +136,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       raise ValueError(f'Reordering mode ({mode}) is not available.')
 
   def get_num_wordpieces(t):
-    return tf_utils.get_shape_list(t.merge_dims(-2, -1))[0]
+    return int(tf.shape(t.merge_dims(-2, -1)))
 
   def _decode_fn(record):
     example = tf.io.parse_single_example(record, name_to_features)
@@ -177,7 +149,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       begin, size, _ = tf.image.sample_distorted_bounding_box(
           tf.shape(im),
           tf.zeros([0, 0, 4], tf.float32),
-          area_range=(0.85, 1.0),
+          area_range=(0.05, 1.0),
           min_object_covered=0,  # Don't enforce a minimum area.
           use_image_if_no_bounding_boxes=True)
       im = tf.slice(im, begin, size)
@@ -209,7 +181,6 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     text_input_ids = []
     for k in input_config.text_keys:
       text_input_ids.append(example[k])
-      example.pop(k)
     text_input_ids = trimmer.trim(text_input_ids)
 
     # Create text_input_ids 
@@ -222,97 +193,21 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     example['text_input_ids'] = text_input_ids
 
     # Total sequence length: image + text
-    example['num_image_wordpieces'] = 2 + num_patch_per_row**2
-    example['num_text_wordpieces'] = get_num_wordpieces(text_input_ids)
+    num_image_wordpieces = 2 + num_patch_per_row**2
+    num_text_wordpieces = get_num_wordpieces(text_input_ids)
+    seq_len = num_image_wordpieces + num_text_wordpieces
+    rest_len = max_seq_len - seq_len
+
+    # Create segment_ids
+    segment_ids = [tf.ones(num_image_wordpieces, dtype=tf.int32),
+                   tf.ones(num_text_wordpieces, dtype=tf.int32)*2,
+                   tf.zeros(rest_len, dtype=tf.int32)]
+    example['segment_ids'] = tf.concat(segment_ids, axis=0)
+
+    # Create input_mask
+    helper = tf.range(max_seq_len)
+    example['input_mask'] = tf.where(helper < seq_len, 1, 0)
 
     return example
 
   return _decode_fn
-
-
-def make_relative_transformer_side_inputs(
-  long_breakpoints: tf.Tensor,
-  relative_pos_max_distance: int,
-  name: Optional[str] = None) -> RelativeTransformerSideInputs:
-  """Makes relative transformer side input tensors
-
-  Args:
-    long_breakpoints: <int32>[batch_size, long_seq_len] Tensor of ending
-      breakpoints separating different packed examples.
-    relative_pos_max_distance: Maximum distance to use for relative position
-      representations. All larger distances will be clipped to this value. Use
-      0 to skip relative position representations entirely.
-    name: A name for the operation (optional).
-
-  Returns:
-    A `RelativeTransformerSideInputs` with all relevant tensors set.
-  """
-
-  with tf.name_scope(name or 'make_relative_transformer_side_inputs'):
-    long_breakpoints = tf.convert_to_tensor(long_breakpoints)
-    long_example_ids = tf.cumsum(long_breakpoints, axis=-1, reverse=True)
-    long_example_ids = tf.convert_to_tensor(long_example_ids)
-    long_seq_len = tf_utils.get_shape_list(long_example_ids)[1]
-    att_mask = etc_feature_utils.make_segmented_att_mask(long_example_ids)
-    batch_size = tf.shape(long_example_ids)[0]
-
-    relative_att_ids = None
-    if relative_pos_max_distance > 0:
-      relative_pos_generator = etc_feature_utils.RelativePositionGenerator(
-          relative_pos_max_distance)
-      relative_att_ids = relative_pos_generator.make_relative_att_ids(
-          seq_len=long_seq_len,
-          batch_size=batch_size)
-
-    return RelativeTransformerSideInputs(
-        att_mask=att_mask,
-        relative_att_ids=relative_att_ids)
-
-
-def add_side_input_features(
-  input_config: PretrainInputConfig,
-  model_config: EtcConfig,
-  features: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
-  """Replaces raw input features with derived ETC side inputs.
-
-  This function is meant to be called as part of a Dataset pipeline.
-
-  Args:
-    model_config: A EtcConfig.
-    features: A dictionary of Tensor features, crucially including
-      `long_breakpoints`, `num_image_wordpieces`, `num_text_wordpieces`.
-
-  Returns:
-    A new `features` dictionary with side inputs.
-  """
-
-  features = dict(features)
-
-  img_wp = features['num_image_wordpieces']
-  txt_wp = features['num_text_wordpieces']
-  seq_len = img_wp + txt_wp
-  max_seq_len_in_batch = tf.reduce_max(seq_len)
-  batch_size = tf_utils.get_shape_list(img_wp)[0]
-
-  img_wp = img_wp[:, tf.newaxis]
-  txt_wp = txt_wp[:, tf.newaxis]
-  helper = tf.range(max_seq_len_in_batch, dtype=tf.int32)
-  img_segment = tf.where(helper < img_wp, 1, 0)
-
-  txt_segment_mask = (helper > img_wp) & (helper < img_wp + txt_wp)
-  txt_segment = tf.where(txt_segment_mask, 2, 0)
-
-  segment_ids = img_segment + txt_segment
-  features['segment_ids'] = segment_ids
-
-  # seq_len-1 because we need the indices
-  features['long_breakpoints'] = tf.one_hot(
-      seq_len-1, depth=max_seq_len_in_batch,
-      on_value=1, off_value=0, dtype=tf.int32)
-
-  side_inputs = make_relative_transformer_side_inputs(
-      long_breakpoints=features['long_breakpoints'],
-      relative_pos_max_distance=model_config.relative_pos_max_distance)
-
-  features.update(side_inputs.to_dict(exclude_none_values=True))
-  return features
