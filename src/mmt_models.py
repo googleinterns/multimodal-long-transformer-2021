@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import tensorflow as tf
+from official.modeling import tf_utils
 
 import configs
 import layers as mmt_layers
