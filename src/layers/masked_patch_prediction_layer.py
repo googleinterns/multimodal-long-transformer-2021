@@ -15,6 +15,7 @@
 from typing import Optional
 
 import tensorflow as tf
+from official.modeling import tf_utils
 
 import tensor_utils
 
