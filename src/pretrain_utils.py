@@ -24,6 +24,7 @@ from official.modeling import tf_utils
 
 import configs
 import input_utils
+import tensor_utils
 from etcmodel.models import modeling
 
 
@@ -154,8 +155,8 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
     shifted_patch_masked_positions = tf.cast(shifted_patch_masked_positions,
                                              tf.int32)
     batch_size = tf_utils.get_shape_list(features['patch_embeddings'])[0]
-    masked_patch_embeddings = gather_indexes(features['patch_embeddings'],
-                                             shifted_patch_masked_positions)
+    masked_patch_embeddings = tensor_utils.gather_indexes(
+      features['patch_embeddings'], shifted_patch_masked_positions)
     masked_patch_embeddings = rearrange(masked_patch_embeddings,
                                         '(b s) h -> b s h',
                                         b=batch_size)
