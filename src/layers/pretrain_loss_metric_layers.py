@@ -73,4 +73,4 @@ class MmtPretrainLossAndMetricLayer(tf.keras.layers.Layer):
     self._add_metrics(mpp_logits, mpp_label_ids, mpp_label_weights,
                       mpp_loss, name='mpp')
 
-    return final_los
+    return final_loss
