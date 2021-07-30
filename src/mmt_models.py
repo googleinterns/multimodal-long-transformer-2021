@@ -77,7 +77,7 @@ def pretrain_model(mmt_config: configs.MmtConfig,
       shape=(None, None,),
       name='relative_att_ids', dtype=tf.int32)
   att_mask = tf.keras.layers.Input(
-      shape=(None,),
+      shape=(None, None,),
       name='att_mask', dtype=tf.int32)
   patch_embeddings = tf.keras.layers.Input(
       shape=(None, patch_embedding_size,),
