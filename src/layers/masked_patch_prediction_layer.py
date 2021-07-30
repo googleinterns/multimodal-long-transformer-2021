@@ -59,7 +59,7 @@ class MaskedPP(tf.keras.layers.Layer):
     if output not in ('predictions', 'logits'):
       raise ValueError(
           (f'Unknown `output` value "{output}". `output` can be either "logits"'
-           f'or "predictions"')
+           f'or "predictions"'))
     self._output_type = output
     self._output_num_classes = output_num_classes
 
