@@ -52,7 +52,7 @@ class MmtPretrainer(tf.keras.Model):
                classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
                name: str = 'mmt_pretrainer',
                **kwargs):
-    super(MmtPretrainer).__init__(self, name=name, **kwargs)
+    super(MmtPretrainer, self).__init__(name=name, **kwargs)
     self._config = {
         'mmt_encoder': mmt_encoder,
         'mlm_initializer': mlm_initializer,
