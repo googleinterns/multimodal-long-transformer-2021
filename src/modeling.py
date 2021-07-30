@@ -31,8 +31,8 @@ class EtcModel(tf.keras.layers.Layer):
   def __init__(self,
                config: modeling.EtcConfig,
                is_training: Optional[bool] = None,
-               use_one_hot_embeddings=False,
-               use_one_hot_relative_embeddings=False,
+               use_one_hot_embeddings=True,
+               use_one_hot_relative_embeddings=True,
                name: str = "etc",
                **kwargs):
     """Constructor for `EtcModel`.
@@ -153,8 +153,7 @@ class EtcModel(tf.keras.layers.Layer):
         indicating whether the call is meant for training or inference. Must
         be None if `is_training` was not None in `__init__`.
     Returns:
-      A list of Tensors, [long_output, global_output]:
-        long_output: <float32>[batch_size, long_seq_len, hidden_size]
+      <float32>[batch_size, long_seq_len, hidden_size].
     """
     if self.is_training is not None:
       if training is not None:
@@ -169,7 +168,7 @@ class EtcModel(tf.keras.layers.Layer):
     if self.config.max_absolute_position_embeddings == 0 and (
         position_ids is not None):
       raise ValueError(
-          "Cannot specify `position_ids` or `global_position_ids` arguments "
+          "Cannot specify `position_ids` arguments "
           "when `max_absolute_position_embeddings` is 0.")
 
     token_ids = token_ids.to_tensor()
@@ -185,19 +184,20 @@ class EtcModel(tf.keras.layers.Layer):
       long_input += long_embedding_adder
 
     if image_data is not None:
-
-      # Create padding to make image_data and long_input have the same shape.
-      batch_size, seq_len, hidden_size = tf_utils.get_shape_list(long_input)
-      _, image_seq_len, _ = tf_utils.get_shape_list(image_data)
-      prefix_pad = tf.zeros(
-          shape=(batch_size, 2, hidden_size),
-          dtype=tf.float32)
-      suffix_pad = tf.zeros(
-          shape=(batch_size, seq_len-2-image_seq_len, hidden_size),
-          dtype=tf.float32)
-      image_data = self.patch_embedding_transform(image_data)
+      # Create padding to make image_data and long_input have the same shape.   
+      seq_len = tf_utils.get_shape_list(long_input)[1]
+      patch_seq_len = tf_utils.get_shape_list(image_data)[1]
       
-      long_input += tf.concat([prefix_pad, image_data, suffix_pad], axis=1)
+      image_data = self.patch_embedding_transform(image_data)
+
+      # Make patch_embeddings and word_embeddings have the same shape.
+      # 2 is for CLS and [PATCH]
+      prefix_pad_len = 2
+      suffix_pad_len = seq_len - 2 - patch_seq_len 
+      image_data = tf.pad(
+          image_data,
+          paddings=[[0, 0], [prefix_pad_len, suffix_pad_len], [0, 0]])
+      long_input += image_data
 
     long_input = self.token_embedding_norm(long_input)
     long_input = self.token_embedding_dropout(long_input, training=training)
