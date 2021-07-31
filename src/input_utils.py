@@ -317,5 +317,5 @@ def add_side_input_features(
   features.update(side_inputs.to_dict())
 
   # TODO (roylu): figure out a better solution
-  # Add None as dummy label
-  return features, None
+  # Add zeros as dummy label
+  return features, tf.zeros((1,), dtype=int32)
