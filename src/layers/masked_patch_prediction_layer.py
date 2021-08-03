@@ -35,16 +35,7 @@ class MaskedPP(tf.keras.layers.Layer):
     output: The output style for this layer. Can be either 'logits' or
       'predictions'.
       
-  Inputs:
-    sequence_data: <tf.Tensor>[batch, sequence_length, embedding_size]
-      encoder sequence output.
-    masked_positions: <tf.Tensor>[batch, mask_sequence_length]
-      the indices of masked tokens.
-    
-  Outputs: <tf.Tensor>[batch, mask_sequence_length, output_num_classes] 
-    the logits or predictions.
   """
-
 
   def __init__(self,
                output_num_classes: int,
@@ -81,6 +72,19 @@ class MaskedPP(tf.keras.layers.Layer):
     super(MaskedPP, self).build(input_shape)
 
   def call(self, sequence_data, masked_positions):
+    """Calls MaskedPP layer.
+
+    Args:
+      sequence_data: <tf.Tensor>[batch, sequence_length, embedding_size]
+        encoder sequence output.
+      masked_positions: <tf.Tensor>[batch, mask_sequence_length]
+        the indices of masked tokens.
+      
+    Returns:
+      <tf.Tensor>[batch, mask_sequence_length, output_num_classes] 
+      the logits or predictions.
+
+    """
     masked_pp_input = tensor_utils.gather_indexes(sequence_data,
                                                   masked_positions)
     pp_data = self.layer_norm(masked_pp_input)
