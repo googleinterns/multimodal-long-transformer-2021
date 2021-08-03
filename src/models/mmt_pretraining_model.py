@@ -42,6 +42,7 @@ class MmtPretrainingModel(tf.keras.Model):
     classification_heads: A list of optional head layers to transform on encoder
       sequence outputs.
     name: The name of the model.
+
   """
 
   def __init__(self,
@@ -54,7 +55,7 @@ class MmtPretrainingModel(tf.keras.Model):
                classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
                name: str = 'mmt_pretrainer',
                **kwargs):
-    super(MmtPretrainer, self).__init__(name=name, **kwargs)
+    super(MmtPretrainingModel, self).__init__(name=name, **kwargs)
     self._config = {
         'mmt_encoder': mmt_encoder,
         'mlm_initializer': mlm_initializer,
@@ -91,7 +92,8 @@ class MmtPretrainingModel(tf.keras.Model):
            masked_text_positions: Optional[tf.Tensor] = None,
            masked_patch_positions: Optional[tf.Tensor] = None,
            training: Optional[bool] = None):
-    """
+    """Calls MmtPretrainingModel.
+
     Args: Inputs defined by the encoder network, plus `masked_text_positions` as a
       dictionary.
       masked_text_positions: <tf.int32>[batch_size, masked_text_seq_len].
@@ -100,6 +102,7 @@ class MmtPretrainingModel(tf.keras.Model):
     Returns: A dictionary of `mlm_logits`, `mpp_logits`, classification head 
       outputs keyed by head names, and also outputs from `encoder_network`,
       keyed by `sequence_output`.
+
     """
 
     outputs = dict()
