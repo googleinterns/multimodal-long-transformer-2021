@@ -20,13 +20,14 @@ import layers as mmt_layers
 import models as mmt_models
 
 
-
-def get_transformer_encoder(mmt_config):
+def get_transformer_encoder(mmt_config: configs.MmtConfig):
   """Gets a `MmtEncoder` object.
+  
   Args:
     mmt_config: A 'MmtConfig' object.
   Returns:
     A encoder object.
+    
   """
   assert isinstance(mmt_config, configs.MmtConfig), 'We only support `MmtConfig` now.'
 
@@ -50,22 +51,27 @@ def get_transformer_encoder(mmt_config):
   return mmt_models.MmtEncoder(**kwargs)
 
 
-def pretrain_model(mmt_config: configs.MmtConfig,
+def pretraining_model(mmt_config: configs.MmtConfig,
                    mpp_output_num_classes: int,
                    patch_embedding_size: int,
                    return_core_pretrainer_model: bool = False):
   """Returns model to be used for pre-training.
+  
   Args:
     mmt_config: Configuration that defines the core BERT model.
     mpp_output_num_classes: The number of output classes for patch prediction.
-      it should be (2 ** output_channel_bits ) ** 3.
+      It should be `(2 ** output_channel_bits ) ** 3`.
+    patch_embedding_size: The size of patch embeddings. 
+      It should be `(patch_size ** 2) * 3`.
     return_core_pretrainer_model: Whether to also return the `MmtPretrainer`
       object.
+      
   Returns:
     A Tuple of
-    (1) MmtPretrainer `with MmtPretrainLossAndMetricLayer`.
+    (1) MmtPretrainer with `MmtPretrainLossAndMetricLayer`.
     (2) core Mmt submodel from which to save weights after pretraining.
     (3) [optional] core `MmtPretrainer` object.
+    
   """
   word_ids = tf.keras.layers.Input(
       shape=(None,),
