@@ -22,16 +22,14 @@ import tensorflow_text as tf_text
 from tensorflow.python.ops import math_ops
 from official.modeling import tf_utils
 
-import configs
 import input_utils
-import tensor_utils
 from etcmodel.models import modeling
 
 
 def input_fn_builder(tokenizer: tf_text.BertTokenizer,
                      input_filenames: List,
                      input_config: input_utils.PretrainInputConfig,
-                     model_config: configs.MmtConfig,
+                     model_config: modeling.EtcConfig,
                      is_training: bool,
                      num_cpu_threads: int = 4):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
@@ -39,7 +37,6 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
   patch_size = input_config.patch_size
   image_size = input_config.image_size
   max_pixel_val = input_config.max_pixel_val
-  channels = input_config.input_channels
   output_channel_bits = input_config.output_channel_bits
 
   vocab = tokenizer._wordpiece_tokenizer._get_vocab_and_ids()[0]
@@ -59,7 +56,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
       selection_rate=input_config.mlm_fraction_to_mask,
       unselectable_ids=unselectable_ids)
 
-  patch_item_selector = tf_text.RandomItemSelector(
+  image_item_selector = tf_text.RandomItemSelector(
       max_selections_per_batch=input_config.mpp_max_selections_per_batch,
       selection_rate=input_config.mpp_fraction_to_mask,
       unselectable_ids=unselectable_ids)
@@ -69,22 +66,23 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
   num_patch_per_row = image_size // patch_size
 
   def make_masked_patch_label_ids(masked_patch_embeddings):
-    """Make taget labels for masked patch prediction
+    """Makes taget labels for masked patch prediction.
   
     Args:
       masked_patch_embeddings:
-        <tf.Tensor>[batch, sequence_length, patch_embedding_size]
+        <tf.Tensor>[batch, sequence_length, patch_embedding_size].
   
     Returns:
-      <tf.Tensor>[batch, sequence_length]
+      <tf.Tensor>[batch, sequence_length].
+
     """
 
+    channels = tf_utils.get_shape_list(patch_tokens)[-1] // (patch_size**2)
     bin_size = max_pixel_val // (2 ** output_channel_bits)
   
-    # Scale from 0-1 to 0-255
-    masked_patch_embeddings = masked_patch_embeddings * (max_pixel_val - 1)
+    patch_tokens = patch_tokens * (max_pixel_val - 1)
     avg_target = reduce(
-        masked_patch_embeddings,
+        patch_tokens,
         'batch seq_len (p2 channels) -> batch (seq_len channels)',
         'mean',
         channels=channels,
@@ -101,16 +99,16 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
     
     bin_mask = (2 ** output_channel_bits) ** tf.range(0, channels)
     bin_mask = rearrange(bin_mask, 'channels -> () () channels')
-    label_ids = bin_mask * discretized_target
-    label_ids = reduce(
-        label_ids,
+    target_label = bin_mask * discretized_target
+    target_label = reduce(
+        target_label,
         'batch seq_len channels -> batch seq_len',
         'sum')
-    return label_ids
+    return target_label
 
   def get_masked_weights(masked_token_ids: tf.Tensor,
                          masked_seq_len: int) -> tf.Tensor:
-    """Get mask for real predictions
+    """Gets mask for real predictions.
 
     The `positions` tensor might be zero-padded (if the sequence is too short 
     to have the maximum number of predictions).
@@ -118,45 +116,52 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
     and 0.0 for the padding predictions.
 
     Args:
-      masked_token_ids: A tensor that contains mask token ids
+      masked_token_ids: A tensor that contains mask token ids.
+
     Returns:
-      A mask that indicate the positions of real predictions
+      A mask that indicate the positions of real predictions.
+
     """
-    mask_position = tf.equal(masked_token_ids, mask_token_id)
-    mask_position = tf.cast(mask_position, tf.int32)
-    num_real_masked_tokens = tf.reduce_sum(mask_position, axis=1, keepdims=True)
-    position = tf.range(masked_seq_len, dtype=tf.int32)
-    return tf.where(position < num_real_masked_tokens, 1.0, 0.0)
+    helper = tf.where(
+        masked_token_ids == mask_token_id, 1.0, 0.0).to_tensor()
+    num_masked_tokens = tf.math.count_nonzero(
+        helper, axis=1, keepdims=True, dtype=tf.int32) 
+    helper = tf.range(masked_seq_len, dtype=tf.int32)
+    return tf.where(helper < num_masked_tokens, 1.0, 0.0) 
 
   def make_masked_language_model_and_masked_patch_prediction_features(
     features: Mapping[str, tf.Tensor]) -> Mapping[str, tf.Tensor]:
-    """Randomly mask out text and patch tokens
+    """Randomly masks out text and patch tokens.
+
     Args:
       features: A dictionary of Tensor features, crucially including
           `patch_input_ids`, `text_input_ids`.
+
     Returns:
       A new `features` dictionary with global-local transformer side inputs.
+
     """
 
     features = dict(features)
 
-    # Patch: create features for masked patch prediction (mpp)
-    # patch_input_ids: <tf.RaggedTensor>[batch, (patches), (1)].
-    (masked_patch_token_ids,
-     masked_patch_positions, _) = tf_text.mask_language_model(
-        features.pop('patch_input_ids'),
-        patch_item_selector,
+    # Image: create features for masked patch prediction (mpp)
+    # image_input_ids: <tf.RaggedTensor>[batch, (patches), (1)].
+    (image_masked_token_ids,
+     image_masked_positions, image_masked_ids) = tf_text.mask_language_model(
+        features['image_input_ids'],
+        image_item_selector,
         mask_values_chooser,
         axis=1)
-        
+
     # Offset -2 position indices: [CLS] and [PATCH] tokens.
-    # We want to select from patch embeddings.
-    shifted_patch_masked_positions = (masked_patch_positions - 2).to_tensor()
-    shifted_patch_masked_positions = tf.cast(shifted_patch_masked_positions,
+    shifted_image_masked_positions = (image_masked_positions - 2).to_tensor()
+    batch_size, image_masked_seq_len = tf_utils.get_shape_list(
+        shifted_image_masked_positions)
+    shifted_image_masked_positions = tf.cast(shifted_image_masked_positions,
                                              tf.int32)
     batch_size = tf_utils.get_shape_list(features['patch_embeddings'])[0]
-    masked_patch_embeddings = tensor_utils.gather_indexes(
-      features['patch_embeddings'], shifted_patch_masked_positions)
+    masked_patch_embeddings = gather_indexes(features['patch_embeddings'],
+                                             shifted_patch_masked_positions)
     masked_patch_embeddings = rearrange(masked_patch_embeddings,
                                         '(b s) h -> b s h',
                                         b=batch_size)
@@ -165,39 +170,37 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
     masked_patch_positions = tf.cast(masked_patch_positions, tf.int32)
     features['masked_patch_positions'] = masked_patch_positions
                                     
-    # Create label for masked patche prediction
+    # Create label for masked patche prediction.
     masked_patch_label_ids = make_masked_patch_label_ids(
         masked_patch_embeddings)
 
-    masked_patch_seq_len = tf_utils.get_shape_list(masked_patch_positions)[1]
-    features['masked_patch_label_weights'] = get_masked_weights(
-        masked_patch_token_ids, masked_patch_seq_len)
-    features['masked_patch_label_ids'] = masked_patch_label_ids
+    features['image_masked_weights'] = get_masked_weights(
+        image_masked_token_ids, image_masked_seq_len)
 
-    # Text: create features for masked language model (mlm)
+    # Text: create features for masked language model (mlm).
     # text_input_ids: <tf.RaggedTensor>[batch, (words), (wordpieces)].
-    text_input_ids = features.pop('text_input_ids')
+    text_input_ids = features['text_input_ids']
     if not input_config.mlm_use_whole_word:
       text_input_ids = text_input_ids.merge_dims(-2, -1)
-    (masked_text_token_ids,
-     masked_text_positions, masked_text_ids) = tf_text.mask_language_model(
+    (text_masked_token_ids,
+     text_masked_positions, text_masked_ids) = tf_text.mask_language_model(
         text_input_ids, text_item_selector, mask_values_chooser, axis=1)
-        
+      
     # Offset text positions because we append text tokens after patch tokens
     # ([CLS] [PATCH] P1 p2 ... P196).
-    masked_text_positions = masked_text_positions + 2 + num_patch_per_row ** 2
-    masked_text_positions = tf.cast(masked_text_positions, tf.int32).to_tensor()
-    features['masked_text_positions'] = masked_text_positions
-    features['masked_text_label_ids'] = masked_text_ids.to_tensor()
+    text_masked_positions = text_masked_positions + 2 + num_patch_per_row ** 2
+    text_masked_positions = tf.cast(text_masked_positions, tf.int32).to_tensor()
+    features['text_masked_positions'] = text_masked_positions
+    features['text_masked_target'] = text_masked_ids.to_tensor()
 
-    # Join text and image token_ids
+    # Join text and image token_ids.
     word_ids = tf.concat(
         [masked_patch_token_ids, masked_text_token_ids], axis=1)
     features['word_ids'] = word_ids.to_tensor()
 
-    text_masked_seq_len = tf_utils.get_shape_list(masked_text_positions)[1]
-    features['masked_text_label_weights'] = get_masked_weights(
-        masked_text_token_ids, text_masked_seq_len)
+    text_masked_seq_len = tf_utils.get_shape_list(text_masked_positions)[1]
+    features['text_masked_weights'] = get_masked_weights(text_masked_token_ids,
+                                                         text_masked_seq_len)
         
     return features
 
@@ -229,7 +232,7 @@ def input_fn_builder(tokenizer: tf_text.BertTokenizer,
       d = d.repeat()
 
     # TODO (roylu)
-    # Filter out examples with empty texts 
+    # Filter out examples with empty texts.
 
     # We must `drop_remainder` on training because the TPU requires fixed
     # size dimensions. For eval, we'd prefer *not* to drop remainder
