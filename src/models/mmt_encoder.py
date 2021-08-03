@@ -25,7 +25,7 @@ _NUM_OTHER_RELATIVE_IDS = 3
 
 
 class MmtEncoder(tf.keras.Model):
-  """Multimodal Transformer-based Encoder
+  """Multimodal Transformer-based Encoder.
 
   This network implements a multimodal transformer-based encoder for 
   image and language understanding. It includes the embedding lookups and 
@@ -36,7 +36,8 @@ class MmtEncoder(tf.keras.Model):
     We follow BERT implementation and use approximated gelu function for faster
     TPU computation.
     https://github.com/tensorflow/models/blob/2de518be2d6a6e3670b223a4582b1353538d3489/official/nlp/keras_nlp/encoders/bert_encoder.py#L26inner_activation
-    https://github.com/google/jax/issues/4428 
+    https://github.com/google/jax/issues/4428
+    
   """
 
   def __init__(self,
@@ -57,7 +58,7 @@ class MmtEncoder(tf.keras.Model):
                initializer_range: float = 0.02,
                use_pre_activation_order: bool = False,
                use_one_hot_lookup: bool = True,
-               name: str = "mmt_encoder",
+               name: str = 'mmt_encoder',
                **kwargs):
 
      super(MmtEncoder, self).__init__(name=name, **kwargs)
@@ -137,8 +138,8 @@ class MmtEncoder(tf.keras.Model):
            relative_att_ids: Optional[tf.Tensor] = None,
            patch_embeddings: Optional[tf.Tensor] = None,
            training: Optional[bool] = None):
-
     """Calls the layer.
+    
       Args:
         word_ids: <int32>[batch_size, seq_len] Tensor of word piece ids.
         segment_ids: <int32>[batch_size, seq_len] Optional Tensor of segment
@@ -147,8 +148,10 @@ class MmtEncoder(tf.keras.Model):
         relative_att_ids: <int32>[batch_size, seq_len, seq_len].
         training: For Keras, optional boolean scalar tensor or Python boolean
           indicating whether the call is meant for training or inference.
+          
       Returns:
         <float32>[batch_size, seq_len, hidden_size].
+        
     """
 
     if segment_ids is None:
@@ -195,8 +198,8 @@ class MmtEncoder(tf.keras.Model):
 
   def get_embedding_table(self):
     """Returns the token embedding table, but only if the model is built."""
-    if not hasattr(self._word_embedding_layer, "embedding_table"):
+    if not hasattr(self._word_embedding_layer, 'embedding_table'):
       raise ValueError(
-          "Cannot call `get_token_embedding_table()` until the model has been "
-          "called so that all variables are built.")
+          'Cannot call `get_token_embedding_table()` until the model has been '
+          'called so that all variables are built.')
     return self._word_embedding_layer.embedding_table
