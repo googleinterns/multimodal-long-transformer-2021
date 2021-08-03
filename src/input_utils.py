@@ -64,16 +64,9 @@ class PretrainInputConfig(object):
   # Maximum output channel bits in masked patch prediction.
   output_channel_bits = attr.ib(default=3)
 
-<<<<<<< HEAD
-||||||| merged common ancestors
-  # Number of channels of input images
-  input_channels = attr.ib(default=3)
-
-=======
   # Number of channels of input images.
   input_channels = attr.ib(default=3)
 
->>>>>>> roylu-input
   # Maximum input sequence length (image+text) after WordPiece tokenization.
   max_seq_len = attr.ib(default=512)
 
@@ -188,16 +181,8 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     example = tf.io.parse_single_example(record, name_to_features)
 
     # Image
-<<<<<<< HEAD
-    # We follow the implementation of ViT
-    im = tf.io.decode_image(example['image_data'], dtype=tf.float32)
-||||||| merged common ancestors
-    # We follow the implementation of ViT
-    im = tf.io.decode_image(example.pop('image_data'), dtype=tf.float32)
-=======
     # We follow the implementation of ViT.
     im = tf.io.decode_image(example.pop('image_data'), dtype=tf.float32)
->>>>>>> roylu-input
     if is_training:
       channels = im.shape[-1]
       begin, size, _ = tf.image.sample_distorted_bounding_box(
@@ -339,19 +324,8 @@ def add_side_input_features(
       long_breakpoints=features['long_breakpoints'],
       relative_pos_max_distance=model_config.relative_pos_max_distance)
 
-<<<<<<< HEAD
-  features.update(side_inputs.to_dict(exclude_none_values=True))
-  return features
-||||||| merged common ancestors
-  features.update(side_inputs.to_dict())
-
-  # TODO (roylu): figure out a better solution
-  # Add None as dummy label
-  return features, None
-=======
   features.update(side_inputs.to_dict())
 
   # TODO (roylu): figure out a better solution.
   # Add None as dummy label.
   return features, None
->>>>>>> roylu-input
