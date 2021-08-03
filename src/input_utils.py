@@ -100,6 +100,7 @@ def get_decode_fn(tokenizer: tf_text.BertTokenizer,
   patch_size = input_config.patch_size
   max_seq_len = input_config.max_seq_len
   num_patch_per_row = image_size // patch_size
+  num_patches = num_patch_per_row ** 2
   vocab = tokenizer._wordpiece_tokenizer._get_vocab_and_ids()[0]
   vocab = vocab.numpy().tolist()
 
@@ -123,13 +124,13 @@ def get_decode_fn(tokenizer: tf_text.BertTokenizer,
   patch_start_idx = vocab.index(patch_start_token)
 
   patch_ids_tensor = tf.expand_dims(
-      tf.range(patch_start_idx, num_patch_per_row**2 + patch_start_idx),
+      tf.range(patch_start_idx, num_patches + patch_start_idx),
       axis=1)
-  patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
+  patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patches, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
   # -2 is for [CLS] and [PATCH]; -1 is for [SEP] at the end of the sequence.
-  max_text_seq_len = (max_seq_len - 2 - num_patch_per_row**2 -
+  max_text_seq_len = (max_seq_len - 2 - num_patches -
                       len(input_config.text_keys) - 1)
   trimmer = tf_text.RoundRobinTrimmer(max_seq_length=[max_text_seq_len])
 
@@ -165,11 +166,11 @@ def get_decode_fn(tokenizer: tf_text.BertTokenizer,
       mode: Mode of reordering.
 
     Returns:
-      <float32>[num_patch_per_row**2, 3*(patch_size**2)].
+      <float32>[num_patches, 3*(patch_size**2)].
 
     """
     if mode == 'raster_scan':
-      return tf.reshape(im, [num_patch_per_row**2, (patch_size**2)*3])
+      return tf.reshape(im, [num_patches, (patch_size**2)*3])
     else:
       raise ValueError(f'Reordering mode ({mode}) is not available.')
 
@@ -232,7 +233,7 @@ def get_decode_fn(tokenizer: tf_text.BertTokenizer,
     example['text_input_ids'] = text_input_ids
 
     # Total sequence length: image + text
-    example['num_image_wordpieces'] = 2 + num_patch_per_row**2
+    example['num_image_wordpieces'] = 2 + num_patches
     example['num_text_wordpieces'] = get_num_wordpieces(text_input_ids)
 
     return example
@@ -377,6 +378,7 @@ def get_masking_fn(tokenizer: tf_text.BertTokenizer,
   mask_values_chooser = tf_text.MaskValuesChooser(len(vocab),
                                                   mask_token_id, 0.8)
   num_patch_per_row = image_size // patch_size
+  num_patches = num_patch_per_row ** 2
 
   def make_masked_patch_label_ids(masked_patch_embeddings):
     """Makes taget labels for masked patch prediction.
@@ -477,7 +479,8 @@ def get_masking_fn(tokenizer: tf_text.BertTokenizer,
     shifted_patch_masked_positions = (masked_patch_positions - 2).to_tensor()
     shifted_patch_masked_positions = tf.cast(shifted_patch_masked_positions,
                                              tf.int32)
-    batch_size = tf_utils.get_shape_list(features['patch_embeddings'])[0]
+    batch_size, _, patch_embedding_size = tf_utils.get_shape_list(
+        features['patch_embeddings'])
     masked_patch_embeddings = tensor_utils.gather_indexes(
       features['patch_embeddings'], shifted_patch_masked_positions)
     masked_patch_embeddings = rearrange(masked_patch_embeddings,
@@ -497,7 +500,20 @@ def get_masking_fn(tokenizer: tf_text.BertTokenizer,
     features['masked_patch_label_weights'] = get_masked_weights(
         masked_patch_token_ids, masked_patch_seq_len)
     features['masked_patch_label_ids'] = masked_patch_label_ids
-  
+
+    # Zeros out patch embeddings that are masked.
+    # The 1st and 2nd token ids in masked_patch_token_ids are [CLS] and [PATCH].
+    sliced_masked_patch_token_ids = tf.slice(
+        masked_patch_token_ids.to_tensor(),
+        begin=[0, 2],
+        size=[batch_size, num_patches])
+    non_masked_token_position = tf.not_equal(sliced_masked_patch_token_ids,
+                                             mask_token_id)
+    non_masked_token_position = tf.cast(non_masked_token_position, tf.float32)
+    non_masked_token_position = tf.expand_dims(non_masked_token_position,
+                                               axis=-1)
+    features['patch_embeddings'] *= non_masked_token_position
+
     # Text: create features for masked language model (mlm).
     # text_input_ids: <tf.RaggedTensor>[batch, (words), (wordpieces)].
     text_input_ids = features.pop('text_input_ids')
@@ -509,7 +525,7 @@ def get_masking_fn(tokenizer: tf_text.BertTokenizer,
         
     # Offset text positions because we append text tokens after patch tokens
     # ([CLS] [PATCH] P1 p2 ... P196).
-    masked_text_positions = masked_text_positions + 2 + num_patch_per_row ** 2
+    masked_text_positions = masked_text_positions + 2 + num_patches
     masked_text_positions = tf.cast(masked_text_positions, tf.int32).to_tensor()
     masked_text_positions = pad_to_max_seq_len(
         masked_text_positions, mlm_max_selections_per_sequence)
