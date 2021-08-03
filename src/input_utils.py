@@ -43,7 +43,7 @@ class PretrainInputConfig(object):
   # Maximum pixel value.
   max_pixel_val = attr.ib(default=256) 
 
-  # The names of text fields we want to use in the input
+  # The names of text fields we want to use in the input.
   text_keys = attr.ib(factory=List)
 
   # Whole word masking for masked language modeling.
@@ -64,7 +64,7 @@ class PretrainInputConfig(object):
   # Output channel bits in masked patch prediction.
   output_channel_bits = attr.ib(default=3)
 
-  # Number of channels of input images
+  # Number of channels of input images.
   input_channels = attr.ib(default=3)
 
   # Maximum input sequence length (image+text) after WordPiece tokenization.
@@ -77,6 +77,7 @@ class RelativeTransformerSideInputs(object):
 
   See `RelativeTransformerLayers.call()` for a description of these side
   inputs.
+
   """
 
   att_mask = attr.ib()  # type: Optional[tf.Tensor]
@@ -113,9 +114,9 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     special_token_to_ragged_tensor[key] = ragged_full(
         (1, 1, 1), tf.int32, unused_token_idx)
 
-  # We start from unused99 to make unused1 to unused98 flexible
-  # The large index of unused tokens is 993
-  # Make sure the number of patches is lower than 895
+  # We start from unused99 to make unused1 to unused98 flexible.
+  # The large index of unused tokens is 993.
+  # Make sure the number of patches is lower than 895.
   patch_start_token = f'[unused{_PATCH_START_UNUSED_INDEX}]'.encode()
   patch_start_idx = vocab.index(patch_start_token)
 
@@ -125,7 +126,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
   patch_ids_tensor = tf.reshape(patch_ids_tensor, (1, num_patch_per_row**2, 1))
   patch_ids_tensor = tf.RaggedTensor.from_tensor(patch_ids_tensor)
 
-  # -2 is for [CLS] and [PATCH]; -1 is for [SEP] at the end of the sequence
+  # -2 is for [CLS] and [PATCH]; -1 is for [SEP] at the end of the sequence.
   max_text_seq_len = (max_seq_len - 2 - num_patch_per_row**2 -
                       len(input_config.text_keys) - 1)
   trimmer = tf_text.RoundRobinTrimmer(max_seq_length=[max_text_seq_len])
@@ -136,11 +137,14 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
         [], tf.string, default_value='')
 
   def convert_image_to_patches(im):
-    """Convert an image to patches (token embeddings).
+    """Converts an image to patches (token embeddings).
+
     Args:
       im: <float32>[height, width, num_channels].
+
     Returns:
       <float32>[num_patch_per_row, num_patch_per_row, 3*(patch_size**2)].
+
     """
     im = tf.expand_dims(im, axis=0)
     im = tf.image.extract_patches(im,
@@ -152,12 +156,15 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     return im
 
   def reorder_patches(im, mode='raster_scan'):
-    """Reorder the patch order of a image.
+    """Reorders the patch order of a image.
+
     Args:
       im: <float32>[num_patch_per_row, num_patch_per_row, 3*(patch_size**2)].
       mode: Mode of reordering.
+
     Returns:
       <float32>[num_patch_per_row**2, 3*(patch_size**2)].
+
     """
     if mode == 'raster_scan':
       return tf.reshape(im, [num_patch_per_row**2, (patch_size**2)*3])
@@ -171,7 +178,7 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
     example = tf.io.parse_single_example(record, name_to_features)
 
     # Image
-    # We follow the implementation of ViT
+    # We follow the implementation of ViT.
     im = tf.io.decode_image(example.pop('image_data'), dtype=tf.float32)
     if is_training:
       channels = im.shape[-1]
@@ -213,8 +220,8 @@ def get_pretrain_example_decode_fn(tokenizer: tf_text.BertTokenizer,
       example.pop(k)
     text_input_ids = trimmer.trim(text_input_ids)
     
-    # Create text_input_ids 
-    # Firstly, insert a special token prior to each text source
+    # Create text_input_ids.
+    # Firstly, insert a special token prior to each text source.
     for i, k in enumerate(input_config.text_keys):
       s = special_token_to_ragged_tensor[k]
       text_input_ids.insert(i*2, s)
@@ -235,7 +242,7 @@ def make_relative_transformer_side_inputs(
   long_breakpoints: tf.Tensor,
   relative_pos_max_distance: int,
   name: Optional[str] = None) -> RelativeTransformerSideInputs:
-  """Makes relative transformer side input tensors
+  """Makes relative transformer side input tensors.
 
   Args:
     long_breakpoints: <int32>[batch_size, long_seq_len] Tensor of ending
@@ -305,7 +312,7 @@ def add_side_input_features(
   segment_ids = img_segment + txt_segment
   features['segment_ids'] = segment_ids
   
-  # seq_len-1 because we need the indices
+  # seq_len-1 because we need the indices.
   features['long_breakpoints'] = tf.one_hot(
       seq_len-1, depth=max_seq_len_in_batch,
       on_value=1, off_value=0, dtype=tf.int32)
@@ -316,6 +323,6 @@ def add_side_input_features(
 
   features.update(side_inputs.to_dict())
 
-  # TODO (roylu): figure out a better solution
-  # Add None as dummy label
+  # TODO (roylu): figure out a better solution.
+  # Add None as dummy label.
   return features, None
