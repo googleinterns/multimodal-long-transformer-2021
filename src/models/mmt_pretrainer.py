@@ -20,7 +20,7 @@ from official.nlp.keras_nlp import layers
 import layers as mmt_layers
 
 
-class MmtPretrainer(tf.keras.Model):
+class MmtPretrainingModel(tf.keras.Model):
   """Multimodal Transformer-based pretraining model.
 
   Adds the masked language model (mlm), masked patch prediction (mpp) and
@@ -28,7 +28,9 @@ class MmtPretrainer(tf.keras.Model):
 
   Args:
     mmt_encoder: A transformer network. This network should output a
-      sequence output
+      sequence output.
+    mpp_output_num_classes: The number of output classes for patch prediction.
+      It should be `(2 ** output_channel_bits ) ** 3`.
     mlm_activation: The activation (if any) to use in the masked LM network. If
       None, no activation will be used.
     mlm_initializer: The initializer (if any) to use in the masked LM. Default
