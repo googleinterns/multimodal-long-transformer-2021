@@ -31,13 +31,13 @@ class MmtEncoder(tf.keras.Model):
   image and language understanding. It includes the embedding lookups and 
   relative transformer layers, but not the masked language model (mlm),
   masked patch prediction (mpp), or classification task networks.
+  We follow BERT implementation and use approximated gelu function for faster
+  TPU computation.
+  (1) Bert implementation: https://github.com/tensorflow/models/blob/2de518be2d6a6e3670b223a4582b1353538d3489/official/nlp/keras_nlp/encoders/bert_encoder.py#L26inner_activation
+  (2) Related issue: https://github.com/google/jax/issues/4428#issuecomment-701793190
 
   Args: refer to `MmtConfig` for more details.
-    We follow BERT implementation and use approximated gelu function for faster
-    TPU computation.
-    https://github.com/tensorflow/models/blob/2de518be2d6a6e3670b223a4582b1353538d3489/official/nlp/keras_nlp/encoders/bert_encoder.py#L26inner_activation
-    https://github.com/google/jax/issues/4428
-    
+
   """
 
   def __init__(self,
@@ -91,13 +91,13 @@ class MmtEncoder(tf.keras.Model):
          initializer_range=initializer_range,
          name='word_embeddings')
 
-     if max_absolute_position_embeddings is not None:
+     if max_absolute_position_embeddings is None:
+       self._position_embedding_layer = None
+     else:
        self._position_embedding_layer = layers.PositionEmbedding(
            initializer=initializer,
            max_length=max_absolute_position_embeddings,
            name='absolute_position_embeddings')
-     else:
-       self._position_embedding_layer = None
 
      self._segment_embedding_layer = etc_layers.EmbeddingLookup(
          vocab_size=segment_vocab_size,
@@ -138,8 +138,8 @@ class MmtEncoder(tf.keras.Model):
            relative_att_ids: Optional[tf.Tensor] = None,
            patch_embeddings: Optional[tf.Tensor] = None,
            training: Optional[bool] = None):
-    """Calls the layer.
-    
+    """Calls MmtEncoder layer.
+
       Args:
         word_ids: <int32>[batch_size, seq_len] Tensor of word piece ids.
         segment_ids: <int32>[batch_size, seq_len] Optional Tensor of segment
@@ -148,10 +148,10 @@ class MmtEncoder(tf.keras.Model):
         relative_att_ids: <int32>[batch_size, seq_len, seq_len].
         training: For Keras, optional boolean scalar tensor or Python boolean
           indicating whether the call is meant for training or inference.
-          
-      Returns:
-        <float32>[batch_size, seq_len, hidden_size].
-        
+
+      Returns: A dictionary of encoder outputs. 
+        sequence_output: <float32>[batch_size, seq_len, hidden_size].
+
     """
 
     if segment_ids is None:
