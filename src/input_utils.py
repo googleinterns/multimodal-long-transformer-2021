@@ -493,7 +493,7 @@ def get_masking_fn(tokenizer: tf_text.BertTokenizer,
         masked_patch_positions, mpp_max_selections_per_sequence)
     features['masked_patch_positions'] = masked_patch_positions
                                     
-    # Create label for masked patche prediction.
+    # Create label for masked patch prediction.
     masked_patch_label_ids = make_masked_patch_label_ids(
         masked_patch_embeddings)
     masked_patch_seq_len = tf_utils.get_shape_list(masked_patch_positions)[1]
