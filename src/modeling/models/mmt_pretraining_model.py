@@ -17,20 +17,18 @@ from typing import Optional, List
 import tensorflow as tf
 from official.nlp.keras_nlp import layers
 
-import layers as mmt_layers
+from modeling import layers as mmt_layers
 
 
 class MmtPretrainingModel(tf.keras.Model):
   """Multimodal Transformer-based pretraining model.
 
-  Adds the masked language model (mlm), masked patch prediction (mpp) and
+  Adds the Masked Language Modeling (MLM), Masked Patch Prediction (MPP) and
   optional classification heads upon the transformer encoder.
 
   Args:
-    mmt_encoder: A transformer network. This network should output a
-      sequence output.
-    mpp_output_num_classes: The number of output classes for patch prediction.
-      It should be `(2 ** output_channel_bits ) ** 3`.
+    encoder: A transformer network. This network should output a
+      sequence output
     mlm_activation: The activation (if any) to use in the masked LM network. If
       None, no activation will be used.
     mlm_initializer: The initializer (if any) to use in the masked LM. Default
@@ -46,31 +44,32 @@ class MmtPretrainingModel(tf.keras.Model):
   """
 
   def __init__(self,
-               mmt_encoder: tf.keras.Model,
-               mpp_output_num_classes,
+               encoder: tf.keras.Model,
+               mpp_output_num_classes=None,
                mlm_activation=None,
                mlm_initializer='glorot_uniform',
                mpp_activation=None,
                mpp_initializer='glorot_uniform',
                classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
-               name: str = 'mmt_pretrainer',
+               name: str = 'mmt_pretraining_model',
                **kwargs):
     super(MmtPretrainingModel, self).__init__(name=name, **kwargs)
     self._config = {
-        'mmt_encoder': mmt_encoder,
+        'encoder': encoder,
+        'mpp_output_num_classes': mpp_output_num_classes,
         'mlm_initializer': mlm_initializer,
         'mpp_initializer': mpp_initializer,
         'classification_heads': classification_heads,
         'name': name,
     }
-    self.mmt_encoder = mmt_encoder
+    self.encoder = encoder
     self.classification_heads = classification_heads or []
     if len(set([cls.name for cls in self.classification_heads])) != len(
         self.classification_heads):
       raise ValueError('Classification heads should have unique names.')
 
     self.masked_lm = layers.MaskedLM(
-        embedding_table=self.mmt_encoder.get_embedding_table(),
+        embedding_table=self.encoder.get_embedding_table(),
         activation=mlm_activation,
         initializer=mlm_initializer,
         output='logits',
@@ -89,57 +88,55 @@ class MmtPretrainingModel(tf.keras.Model):
            att_mask: Optional[tf.Tensor] = None,
            relative_att_ids: Optional[tf.Tensor] = None,
            patch_embeddings: Optional[tf.Tensor] = None,
-           masked_text_positions: Optional[tf.Tensor] = None,
-           masked_patch_positions: Optional[tf.Tensor] = None,
+           mlm_positions: Optional[tf.Tensor] = None,
+           mpp_positions: Optional[tf.Tensor] = None,
            training: Optional[bool] = None):
     """Calls MmtPretrainingModel.
 
-    Args: Inputs defined by the encoder network, plus `masked_text_positions` as a
-      dictionary.
-      masked_text_positions: <tf.int32>[batch_size, masked_text_seq_len].
-      masked_patch_positions: <tf.int32>[batch_size, masked_patch_seq_len].
+    Args: Inputs defined by the encoder network, plus `mlm_positions`
+      and `mpp_positions` as a dictionary.
+      mlm_positions: <tf.int32>[batch_size, masked_text_seq_len].
+      mpp_positions: <tf.int32>[batch_size, masked_patch_seq_len].
   
     Returns: A dictionary of `mlm_logits`, `mpp_logits`, classification head 
       outputs keyed by head names, and also outputs from `encoder_network`,
       keyed by `sequence_output`.
-
+      
     """
 
     outputs = dict()
     
-    mmt_encoder_outputs = self.mmt_encoder(
+    encoder_outputs = self.encoder(
         word_ids=word_ids,
         segment_ids=segment_ids,
         att_mask=att_mask,
         relative_att_ids=relative_att_ids,
         patch_embeddings=patch_embeddings,
         training=training)
-    outputs.update(mmt_encoder_outputs)
+    outputs.update(encoder_outputs)
     sequence_output = outputs['sequence_output']
 
-    # Inference may not have masked_text_positions or masked_patch_position
+    # Inference may not have mlm_positions or masked_patch_position
     # Thus, mlm_logits and mpp_logits are not needed.
-    if masked_text_positions is not None:
+    if mlm_positions is not None:
       outputs['mlm_logits'] = self.masked_lm(
-          sequence_output, masked_positions=masked_text_positions)
+          sequence_output, masked_positions=mlm_positions)
 
-    if masked_patch_positions is not None:
+    if mpp_positions is not None:
       outputs['mpp_logits'] = self.masked_pp(
-          sequence_output, masked_positions=masked_patch_positions)
+          sequence_output, masked_positions=mpp_positions)
 
     for cls_head in self.classification_heads:
-      cls_outputs = cls_head(sequence_output)
-      if isinstance(cls_outputs, dict):
-        outputs.update(cls_outputs)
-      else:
-        outputs[cls_head.name] = cls_outputs
+      cls_outputs = cls_head(outputs['sequence_output'])
+      outputs[f'{cls_head.name}_logits'] = cls_outputs
+
     return outputs
 
   @property
   def checkpoint_items(self):
     """Returns a dictionary of items to be additionally checkpointed."""
     items = dict(
-        encoder=self.mmt_encoder,
+        encoder=self.encoder,
         masked_lm=self.masked_lm,
         masked_pp=self.masked_pp,
     )
