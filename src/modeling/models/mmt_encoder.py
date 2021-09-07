@@ -239,8 +239,8 @@ class MmtEncoder(tf.keras.Model):
     """Returns the token embedding table, but only if the model is built."""
     if not hasattr(self._word_embedding_layer, 'embedding_table'):
       raise ValueError(
-          "Cannot call `get_token_embedding_table()` until the model has been "
-          "called so that all variables are built.")
+          'Cannot call `get_token_embedding_table()` until the model has been '
+          'called so that all variables are built.')
     return self._word_embedding_layer.embedding_table
 
   def get_embedding_layer(self):
