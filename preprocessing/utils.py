@@ -53,7 +53,7 @@ def image_example(image_string, string_dict, int_dict=None):
   return tf.train.Example(features=tf.train.Features(feature=feature))
 
 
-def get_txt_info(txt_info_filename):
+def get_txt_info(txt_info_filename, description_key='description'):
   """Gets metadata of each image_id (image file).
   
   Returns:
@@ -77,7 +77,7 @@ def get_txt_info(txt_info_filename):
         'image_id': image_id.encode(),
         'category': category.encode(),
         'sub_category': sub_category.encode(),
-        'original_description': description.encode(),
+        description_key: description.encode(),
       }
   
       if i % 10000 == 0:

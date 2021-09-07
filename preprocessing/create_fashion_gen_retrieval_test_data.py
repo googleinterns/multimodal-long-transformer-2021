@@ -59,7 +59,8 @@ with tf.io.gfile.GFile(i2t_meta_filename, 'r') as f:
 with tf.io.gfile.GFile(t2i_meta_filename, 'r') as f:
   t2i_df = pd.read_csv(f, dtype=dtype)
 
-txt_info = utils.get_txt_info(txt_info_filename)
+txt_info = utils.get_txt_info(txt_info_filename,
+                              description_key='original_description')
 
 meta_data = {
     'processor_type': 'fashion_gen',
