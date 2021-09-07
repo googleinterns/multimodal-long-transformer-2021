@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 from typing import Optional
 
 import tensorflow as tf
 from official.modeling import tf_utils
 from official.nlp.keras_nlp import layers
 
-from etcmodel import layers as etc_layers
 from etcmodel import feature_utils as etc_feature_utils
+from etcmodel import layers as etc_layers
+
 
 _NUM_OTHER_RELATIVE_IDS = 3
 
@@ -36,7 +38,7 @@ class MmtEncoder(tf.keras.Model):
   (1) Bert implementation: https://github.com/tensorflow/models/blob/2de518be2d6a6e3670b223a4582b1353538d3489/official/nlp/keras_nlp/encoders/bert_encoder.py#L26inner_activation
   (2) Related issue: https://github.com/google/jax/issues/4428#issuecomment-701793190
 
-  Args: refer to `MmtConfig` for more details.
+  Args: refer to `MmtEncoderConfig` for more details.
 
   """
 
@@ -58,6 +60,7 @@ class MmtEncoder(tf.keras.Model):
                initializer_range: float = 0.02,
                use_pre_activation_order: bool = False,
                use_one_hot_lookup: bool = True,
+               use_pooler_layer: bool = False,
                name: str = 'mmt_encoder',
                **kwargs):
 
@@ -118,7 +121,7 @@ class MmtEncoder(tf.keras.Model):
      self._embedding_dropout_layer = tf.keras.layers.Dropout(
          rate=hidden_dropout_prob, name='embeddings/dropout')
 
-     self._relative_transformer = etc_layers.RelativeTransformerLayers(
+     self._transformer_layers = etc_layers.RelativeTransformerLayers(
          hidden_size=hidden_size,
          num_hidden_layers=num_hidden_layers,
          num_attention_heads=num_attention_heads,
@@ -130,7 +133,36 @@ class MmtEncoder(tf.keras.Model):
          relative_vocab_size=relative_vocab_size,
          use_pre_activation_order=use_pre_activation_order,
          use_one_hot_lookup=use_one_hot_lookup)
-     
+
+     if use_pooler_layer:
+       self._pooler_layer = tf.keras.layers.Dense(
+           units=hidden_size,
+           activation='tanh',
+           kernel_initializer=initializer,
+           name='pooler_transform')
+
+     config_dict = {
+         'vocab_size': vocab_size,
+         'segment_vocab_size': segment_vocab_size,
+         'hidden_size': hidden_size,
+         'num_hidden_layers': num_hidden_layers,
+         'num_attention_heads': num_attention_heads,
+         'intermediate_size': intermediate_size,
+         'inner_activation': tf.keras.activations.serialize(activation),
+         'hidden_dropout_prob': hidden_dropout_prob,
+         'attention_probs_dropout_prob': attention_probs_dropout_prob,
+         'max_absolute_position_embeddings': max_absolute_position_embeddings,
+         'relative_vocab_size': relative_vocab_size,
+         'relative_pos_max_distance': relative_pos_max_distance,
+         'initializer_range': initializer_range,
+         'use_pre_activation_order': use_pre_activation_order,
+         'use_one_hot_lookup': use_one_hot_lookup,
+         'use_pooler_layer': use_pooler_layer
+      }
+
+     config_cls = collections.namedtuple('Config', config_dict.keys())
+     self._config = config_cls(**config_dict)
+
   def call(self,
            word_ids: tf.Tensor,
            segment_ids: Optional[tf.Tensor] = None,
@@ -184,22 +216,61 @@ class MmtEncoder(tf.keras.Model):
     embeddings = self._embedding_norm_layer(embeddings)
     embeddings = self._embedding_dropout_layer(embeddings, training=training)
 
-    encoder_output = self._relative_transformer(
+    encoder_output = self._transformer_layers(
         inputs=embeddings,
         att_mask=att_mask,
         relative_att_ids=relative_att_ids,
         training=training)
 
-    outputs = dict(
-        sequence_output=encoder_output,
-    )
+    outputs = dict()
+    outputs['sequence_output'] = encoder_output
+
+    if hasattr(self, '_pooler_layer'):
+      batch_size, _, hidden_size = tf_utils.get_shape_list(encoder_output)
+      first_token_tensor = tf.slice(
+          encoder_output, [0, 0, 0], [batch_size, 1, hidden_size])
+      first_token_tensor = tf.squeeze(first_token_tensor, axis=1)
+      cls_output = self._pooler_layer(first_token_tensor)
+      outputs[pooled_output] = cls_output
 
     return outputs
 
   def get_embedding_table(self):
     """Returns the token embedding table, but only if the model is built."""
-    if not hasattr(self._word_embedding_layer, 'embedding_table'):
+    if not hasattr(self._word_embedding_layer, "embedding_table"):
       raise ValueError(
-          'Cannot call `get_token_embedding_table()` until the model has been '
-          'called so that all variables are built.')
+          "Cannot call `get_token_embedding_table()` until the model has been "
+          "called so that all variables are built.")
     return self._word_embedding_layer.embedding_table
+
+  def get_embedding_layer(self):
+    return self._word_embedding_layer
+
+  def get_config(self):
+    return dict(self._config._asdict())
+
+  @property
+  def transformer_layers(self):
+    """List of Transformer layers in the encoder."""
+    return self._transformer_layers
+
+  @property
+  def pooler_layer(self):
+    """The pooler dense layer after the transformer layers."""
+    if hasattr(self, '_pooler_layer'):
+      return self._pooler_layer
+    else:
+      raise ValueError('pooler layers is not initialized.')
+
+  @classmethod
+  def from_config(cls, config, custom_objects=None):
+    if 'embedding_layer' in config and config['embedding_layer'] is not None:
+      warn_string = (
+          'You are reloading a model that was saved with a '
+          'potentially-shared embedding layer object. If you contine to '
+          'train this model, the embedding layer will no longer be shared. '
+          'To work around this, load the model outside of the Keras API.')
+      print('WARNING: ' + warn_string)
+      logging.warn(warn_string)
+
+    return cls(**config)
