@@ -31,7 +31,7 @@ txt_info_filename = f'gs://mmt/raw_data/fashion_gen/full_valid_info.txt'
 i2t_meta_filename = f'gs://mmt/fashion_gen/metadata/fashion_bert_i2t_test.csv'
 t2i_meta_filename = f'gs://mmt/fashion_gen/metadata/fashion_bert_t2i_test.csv'
 
-num_records = 8
+num_records = 32
 # Using local paths for image files will be faster.
 # {} will be an image_id.
 basename = 'gs://mmt/raw_data/fashion_gen/extracted_valid_images/{}.png'
@@ -44,37 +44,6 @@ meta_data_basename = 'gs://mmt/fashion_gen/inference_data/{}/input_meta_data'
 val_input_path_basename = ('gs://mmt/fashion_gen/inference_data/{}/'
                            'fashion_gen.fashion_bert.valid.recordio-*')
 
-
-def get_txt_info():
-  """Gets metadata of each image_id (image file).
-  
-  Returns:
-  txt_info: A dictionary. key is the image_id and value is a dictionary of the
-  corresponding metadata.
-  
-  """
-  txt_info = dict()
-  with tf.io.gfile.GFile(txt_info_filename, 'r') as f:
-    for i, line in enumerate(f, start=1):
-      line = line.split('\x01')
-  
-      image_main_id = line[0]
-      image_id = line[1]
-      category = line[2]
-      sub_category = line[4]
-      description = line[6] 
-  
-      txt_info[image_id] = {
-        'image_main_id': image_main_id.encode(),
-        'image_id': image_id.encode(),
-        'category': category.encode(),
-        'sub_category': sub_category.encode(),
-        'original_description': description.encode(),
-      }
-  
-      if i % 10000 == 0:
-        print(f'Read txt info: {i}')
-  return txt_info
 
 dtype = {
     'text_prod_id': str,  
@@ -90,7 +59,7 @@ with tf.io.gfile.GFile(i2t_meta_filename, 'r') as f:
 with tf.io.gfile.GFile(t2i_meta_filename, 'r') as f:
   t2i_df = pd.read_csv(f, dtype=dtype)
 
-txt_info = get_txt_info()
+txt_info = utils.get_txt_info(txt_info_filename)
 
 meta_data = {
     'processor_type': 'fashion_gen',
@@ -106,6 +75,7 @@ for task, df in [('i2t', i2t_df), ('t2i', t2i_df)]:
   tfrecord_filename = tfrecord_basename.format(task,
                                                record_idx,
                                                num_records)
+  print(f'  Write to {tfrecord_filename}.')
   writer = tf.io.TFRecordWriter(tfrecord_filename)
 
   for i, (_, row) in enumerate(df.iterrows(), start=1):
@@ -133,6 +103,7 @@ for task, df in [('i2t', i2t_df), ('t2i', t2i_df)]:
       tfrecord_filename = tfrecord_basename.format(task,
                                                    record_idx,
                                                    num_records)
+      print(f'  Write to {tfrecord_filename}.')
       writer = tf.io.TFRecordWriter(tfrecord_filename)
     writer.write(tf_ex.SerializeToString())
 
