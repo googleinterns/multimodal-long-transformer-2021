@@ -27,8 +27,8 @@ class MmtPretrainingModel(tf.keras.Model):
   optional classification heads upon the transformer encoder.
 
   Args:
-    encoder: A transformer network. This network should output a
-      sequence output
+    encoder: A transformer network. This network should output a sequence of 
+      contextualized word embeddings (sequence_output).
     mlm_activation: The activation (if any) to use in the masked LM network. If
       None, no activation will be used.
     mlm_initializer: The initializer (if any) to use in the masked LM. Default
@@ -69,7 +69,7 @@ class MmtPretrainingModel(tf.keras.Model):
       raise ValueError('Classification heads should have unique names.')
 
     self.masked_lm = layers.MaskedLM(
-        embedding_table=self.encoder.get_embedding_table(),
+        embedding_table=self.encoder.get_word_embedding_table(),
         activation=mlm_activation,
         initializer=mlm_initializer,
         output='logits',
@@ -116,7 +116,7 @@ class MmtPretrainingModel(tf.keras.Model):
     outputs.update(encoder_outputs)
     sequence_output = outputs['sequence_output']
 
-    # Inference may not have mlm_positions or masked_patch_position
+    # Inference may not have mlm_positions or mpp_position
     # Thus, mlm_logits and mpp_logits are not needed.
     if mlm_positions is not None:
       outputs['mlm_logits'] = self.masked_lm(

@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Masked Token Modeling (MTM) Task.
-Include Masked Language Modeling (MLM) and Masked Patch Prediction (MPP).
-"""
+"""Pretraining Task."""
 
 from typing import Mapping
 
@@ -36,20 +34,20 @@ from modeling import models
 
 
 @dataclasses.dataclass
-class MaskedTMConfig(cfg.TaskConfig):
-  """The model config."""
+class PretrainingTaskConfig(cfg.TaskConfig):
+  """The pretraining task config."""
   model: mmt.PretrainModelConfig = mmt.PretrainModelConfig()
-
   scale_loss: bool = False
   train_data: cfg.DataConfig = cfg.DataConfig()
   validation_data: cfg.DataConfig = cfg.DataConfig()
 
 
-@task_factory.register_task_cls(MaskedTMConfig)
-class MaskedTMTask(base_task.Task):
-  """Task object for Masked Tokens Modeling (MTM).
+@task_factory.register_task_cls(PretrainingTaskConfig)
+class PretrainingTask(base_task.Task):
+  """Task object for pretraining.
 
-  MTM includes Masked Language Modeling (MLM) and Masked Patch Prediction (MPP).
+  Pretraining tasks include Masked Language Modeling (MLM), Masked Patch 
+  Prediction (MPP), and Image-Text Matching (ITM).
 
   """
 
@@ -192,7 +190,7 @@ class MaskedTMTask(base_task.Task):
     return metrics
 
   def process_metrics(self, metrics, labels, model_outputs):
-    with tf.name_scope('MaskedTMTask/process_metrics'):
+    with tf.name_scope('PretrainingTask/process_metrics'):
       if 'itm_label_weights' in labels:
         # Masks out mlm and mpp losses on negative examples of itm.
         itm_label_ids = labels['itm_label_ids']
@@ -222,7 +220,7 @@ class MaskedTMTask(base_task.Task):
                  model: tf.keras.Model,
                  optimizer: tf.keras.optimizers.Optimizer,
                  metrics: tf.keras.metrics.Metric):
-    """Does forward and backward.
+    """Does forward and backward pass.
 
     Args:
       inputs: a dictionary of input tensors.
