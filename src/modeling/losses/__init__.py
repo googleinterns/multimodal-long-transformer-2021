@@ -13,6 +13,5 @@
 # limitations under the License.
 
 """Losses contains common loss computation."""
-#from .weighted_binary_crossentropy_loss import weighted_binary_crossentropy_loss
-from .weighted_sparse_categorical_crossentropy_loss import weighted_sparse_categorical_crossentropy_loss
-#from .weighted_sparse_softmax_cross_entropy_with_logits import weighted_sparse_softmax_cross_entropy_with_logits
+
+from modeling.losses.weighted_sparse_categorical_crossentropy_loss import weighted_sparse_categorical_crossentropy_loss
