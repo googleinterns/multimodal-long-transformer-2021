@@ -13,9 +13,9 @@
 # limitations under the License.
 
 """Mmt model configurations."""
+import dataclasses
 from typing import List, Optional
 
-import dataclasses
 from official.modeling.hyperparams import base_config
 
 from configs import encoders
@@ -25,7 +25,7 @@ from configs import encoders
 class ClsHeadConfig(base_config.Config):
   inner_dim: int = 0
   num_classes: int = 2
-  activation: Optional[str] = "tanh"
+  activation: Optional[str] = 'tanh'
   dropout_rate: float = 0.0
   cls_token_idx: int = 0
   name: Optional[str] = None
