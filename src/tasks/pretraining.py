@@ -14,7 +14,7 @@
 
 """Pretraining Task."""
 
-from typing import Mapping
+from typing import Mapping, Tuple
 
 import dataclasses
 import tensorflow as tf
@@ -28,13 +28,14 @@ from official.nlp.data import data_loader_factory
 from official.nlp.modeling import layers
 
 from configs import encoders
+from configs import mmt
 import input_utils
 from modeling import losses
-from configs import mmt
 from modeling import models
 
 
-# For gradient accumulation, the maximum batch size per step.
+# For gradient accumulation, the maximum batch size per training step when
+# maximum sequence length `max_seq_len = 256`.
 BATCH_SIZE_PER_REPLICA = 64
 
 
@@ -221,7 +222,7 @@ class PretrainingTask(base_task.Task):
             labels['itm_label_weights'])
 
   def train_step(self,
-                 inputs: Tuple[Mapping[str, tf.Tensor], Mapping[str, tf.Tensor]]
+                 inputs: Tuple[Mapping[str, tf.Tensor], Mapping[str, tf.Tensor]],
                  model: tf.keras.Model,
                  optimizer: tf.keras.optimizers.Optimizer,
                  metrics: Mapping[str, tf.keras.metrics.Metric]):
