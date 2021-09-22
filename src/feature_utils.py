@@ -33,6 +33,29 @@ class MmtRelativePositionGenerator(object):
                num_patch_per_row: int,
                num_core_layers: int,
                text_relative_pos_max_distance: int):
+    """instantiates an object to generate relative attention IDs for Mmt model.
+
+    Args:
+      num_patch_per_row: the value is image size divided by patch size. For
+        example, image size is 224 and patch size is 16. the # ptch per row will
+        be 224 / 16 = 14.
+      num_core_layers: the radius (except ID 0) of fine-grained 2D attention.
+        For example, if the num_core_layers is 1, then we have 9 IDs. 
+               -
+        5 6 7  | num_core_layers = 1
+        8 0 1  - 
+        2 3 4
+
+        If the num_core_layers is 2, then we have 9 IDs. 
+                        -
+        13 14 15 16 17  | num_core_layers = 2
+        18 19 20 21 22  |
+        23 24  0  1  2  - 
+         3  4  5  6  7
+         8  9 10 11 12
+      text_relative_pos_max_distance: the maximum radius for 1D attention (text).
+
+    """
 
     if num_patch_per_row <= 0:
       raise ValueError('`num_patch_per_row` must be positive.')
@@ -43,7 +66,7 @@ class MmtRelativePositionGenerator(object):
 
     self._num_patch_per_row = num_patch_per_row
     # The number of core layers (radius from the top layer to the center) of
-    # fine-grained position ids. The minimum is 1 which will has 9 ids.
+    # fine-grained position ids. The minimum is 1 which will result in 9 ids.
     self._num_core_layers = num_core_layers
     # core_layer_diameter will be 3 in the case shown above.
     self._core_layer_diameter = num_core_layers * 2 + 1
