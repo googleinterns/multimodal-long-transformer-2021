@@ -16,18 +16,23 @@
 
 import json
 import os
+
 import tensorflow as tf
 
 
 def _collective_communication(all_reduce_alg):
   """Return a CollectiveCommunication based on all_reduce_alg.
+
   Args:
     all_reduce_alg: a string specifying which collective communication to pick,
       or None.
+
   Returns:
     tf.distribute.experimental.CollectiveCommunication object
+
   Raises:
     ValueError: if `all_reduce_alg` not in [None, "ring", "nccl"]
+
   """
   collective_communication_options = {
       None: tf.distribute.experimental.CollectiveCommunication.AUTO,
@@ -44,13 +49,17 @@ def _collective_communication(all_reduce_alg):
 
 def _mirrored_cross_device_ops(all_reduce_alg, num_packs):
   """Return a CrossDeviceOps based on all_reduce_alg and num_packs.
+
   Args:
     all_reduce_alg: a string specifying which cross device op to pick, or None.
     num_packs: an integer specifying number of packs for the cross device op.
+
   Returns:
     tf.distribute.CrossDeviceOps object or None.
+
   Raises:
     ValueError: if `all_reduce_alg` not in [None, "nccl", "hierarchical_copy"].
+
   """
   if all_reduce_alg is None:
     return None
@@ -69,10 +78,13 @@ def _mirrored_cross_device_ops(all_reduce_alg, num_packs):
 
 def tpu_initialize(tpu_address, zone):
   """Initializes TPU for TF 2.x training.
+
   Args:
     tpu_address: string, bns address of master TPU worker.
+
   Returns:
     A TPUClusterResolver.
+
   """
   cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver(
       tpu=tpu_address, zone=zone, project='compositionality')
@@ -90,6 +102,7 @@ def get_distribution_strategy(distribution_strategy="mirrored",
                               zone=None,
                               **kwargs):
   """Return a DistributionStrategy for running the model.
+  
   Args:
     distribution_strategy: a string specifying which distribution strategy to
       use. Accepted values are "off", "one_device", "mirrored",
@@ -108,13 +121,17 @@ def get_distribution_strategy(distribution_strategy="mirrored",
       or `tf.distribute.HierarchicalCopyAllReduce` for `MirroredStrategy`.
     tpu_address: Optional. String that represents TPU to connect to. Must not be
       None if `distribution_strategy` is set to `tpu`.
+    zone: Optional. String that represents the zone of the TPU.
     **kwargs: Additional kwargs for internal usages.
+
   Returns:
     tf.distribute.DistibutionStrategy object.
+
   Raises:
     ValueError: if `distribution_strategy` is "off" or "one_device" and
       `num_gpus` is larger than 1; or `num_gpus` is negative or if
       `distribution_strategy` is `tpu` but `tpu_address` is not specified.
+
   """
   del kwargs
   if num_gpus < 0:
@@ -173,11 +190,14 @@ def get_distribution_strategy(distribution_strategy="mirrored",
 
 def configure_cluster(worker_hosts=None, task_index=-1):
   """Set multi-worker cluster spec in TF_CONFIG environment variable.
+
   Args:
     worker_hosts: comma-separated list of worker ip:port pairs.
     task_index: index of the worker.
+
   Returns:
     Number of workers in the cluster.
+
   """
   tf_config = json.loads(os.environ.get("TF_CONFIG", "{}"))
   if tf_config:
