@@ -39,7 +39,7 @@ class MaskedPP(tf.keras.layers.Layer):
 
   def __init__(self,
                output_num_classes: int,
-               activation: Optional[str]=None,
+               activation: Optional[str] = None,
                initializer: str = 'glorot_uniform',
                output: str = 'logits',
                name: Optional[str] = None,
