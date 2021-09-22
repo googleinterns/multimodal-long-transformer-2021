@@ -192,6 +192,10 @@ class MmtEncoder(tf.keras.Model):
     word_embeddings = self._word_embedding_layer(word_ids)
     segment_embeddings = self._segment_embedding_layer(segment_ids)
 
+    word_embeddings = self._embedding_norm_layer(word_embeddings)
+    word_embeddings = self._embedding_dropout_layer(word_embeddings,
+                                                    training=training)
+
     embeddings = word_embeddings + segment_embeddings
 
     if self._position_embedding_layer is not None:
@@ -212,9 +216,6 @@ class MmtEncoder(tf.keras.Model):
           patch_embeddings,
           paddings=[[0, 0], [prefix_pad_len, suffix_pad_len], [0, 0]])
       embeddings += patch_embeddings
-
-    embeddings = self._embedding_norm_layer(embeddings)
-    embeddings = self._embedding_dropout_layer(embeddings, training=training)
 
     encoder_output = self._transformer_layers(
         inputs=embeddings,

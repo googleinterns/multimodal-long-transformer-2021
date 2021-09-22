@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, List
+from typing import Optional, List, Callable, Union
 
 import tensorflow as tf
 from official.nlp.keras_nlp import layers
@@ -45,12 +45,13 @@ class MmtPretrainingModel(tf.keras.Model):
 
   def __init__(self,
                encoder: tf.keras.Model,
-               mpp_output_num_classes=None,
-               mlm_activation=None,
-               mlm_initializer='glorot_uniform',
-               mpp_activation=None,
-               mpp_initializer='glorot_uniform',
+               mpp_output_num_classes: int = None,
+               mlm_activation: Optional[Union[Callable, str]] = None,
+               mlm_initializer: str = 'glorot_uniform',
+               mpp_activation: Optional[Union[Callable, str]] = None,
+               mpp_initializer: str ='glorot_uniform',
                classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
+               bind_word_embedding_table: bool = True,
                name: str = 'mmt_pretraining_model',
                **kwargs):
     super(MmtPretrainingModel, self).__init__(name=name, **kwargs)
@@ -68,8 +69,21 @@ class MmtPretrainingModel(tf.keras.Model):
         self.classification_heads):
       raise ValueError('Classification heads should have unique names.')
 
+    embedding_layer = self.encoder.get_embedding_layer()
+    if bind_word_embedding_table:
+      embedding_table = embedding_layer.embedding_table
+    else:
+      self.mlm_embedding_table = embedding_table = self.add_weight(
+        name='mlm_embedding_table',
+        shape=[embedding_layer.vocab_size,
+               embedding_layer.embedding_size],
+        dtype=tf.float32,
+        initializer=tf.keras.initializers.TruncatedNormal(
+            stddev=embedding_layer.initializer_range),
+        trainable=True)
+
     self.masked_lm = layers.MaskedLM(
-        embedding_table=self.encoder.get_word_embedding_table(),
+        embedding_table=embedding_table,
         activation=mlm_activation,
         initializer=mlm_initializer,
         output='logits',
@@ -127,7 +141,7 @@ class MmtPretrainingModel(tf.keras.Model):
           sequence_output, masked_positions=mpp_positions)
 
     for cls_head in self.classification_heads:
-      cls_outputs = cls_head(outputs['sequence_output'])
+      cls_outputs = cls_head(sequence_output)
       outputs[f'{cls_head.name}_logits'] = cls_outputs
 
     return outputs
@@ -142,7 +156,7 @@ class MmtPretrainingModel(tf.keras.Model):
     )
     for head in self.classification_heads:
       for key, item in head.checkpoint_items.items():
-        items['.'.join([head.name, key])] = item
+        items[f'{head.name}.{key}'] = item
     return items
 
   def get_config(self):
