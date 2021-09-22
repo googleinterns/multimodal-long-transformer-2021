@@ -38,7 +38,7 @@ class MmtPretrainDataConfig(configs.MmtDataConfig):
   mlm_max_selections_per_seq: int = 512
   mpp_max_selections_per_seq: int = 98
   output_channel_bits: int = 3 
-  input_channels: int =3
+  input_channels: int = 3
   use_patch_mask_token_id: bool = False
   negative_sample_rate: int = 1
   alternate_mlm_mpp: bool = False
