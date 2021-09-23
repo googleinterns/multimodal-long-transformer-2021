@@ -14,20 +14,29 @@
 
 import tensorflow as tf
 
-
-def weighted_sparse_categorical_crossentropy_loss(logits,
-                                                  labels,
-                                                  label_weights,
-                                                  metrics,
-                                                  name):
+def weighted_sparse_categorical_crossentropy_loss(logits, labels, label_weights, metrics, name, pos_weights=None):
   with tf.name_scope(name):
     metrics = dict([(metric.name, metric) for metric in metrics])
-    prediction_losses = tf.keras.losses.sparse_categorical_crossentropy(
+    unweighted_losses = tf.keras.losses.sparse_categorical_crossentropy(
         labels,
         tf.cast(logits, tf.float32),
         from_logits=True)
-    label_weights = tf.cast(label_weights, prediction_losses.dtype) 
-    numerator_loss = tf.reduce_sum(prediction_losses * label_weights)
+
+    if pos_weights is None:
+      pos_weights = tf.ones_like(unweighted_losses,
+                                 dtype=unweighted_losses.dtype)
+    else:
+      pos_weights = tf.cast(pos_weights, unweighted_losses.dtype) 
+
+    # Weights losses by thier positive weights.
+    losses = pos_weights * unweighted_losses
+
+    # Weights losses by label_weights. label_weights is used to ignore some
+    # examples when we don't want to compute their losses.
+    label_weights = tf.cast(label_weights, unweighted_losses.dtype) 
+    losses = label_weights * losses
+
+    numerator_loss = tf.reduce_sum(losses)
     denominator_loss = tf.reduce_sum(label_weights)
     loss = tf.math.divide_no_nan(numerator_loss, denominator_loss)
     metrics[f'{name}_loss'].update_state(loss)
