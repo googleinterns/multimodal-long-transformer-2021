@@ -36,9 +36,9 @@ class MmtRelativePositionGenerator(object):
     """instantiates an object to generate relative attention IDs for Mmt model.
 
     Args:
-      num_patch_per_row: the value is image size divided by patch size. For
-        example, image size is 224 and patch size is 16. the # ptch per row will
-        be 224 / 16 = 14.
+      num_patch_per_row: the value is image size divided by patch size. We assume
+        all images and patches are square. For example, image size is 224 and 
+        patch size is 16. the # ptch per row will be 224 / 16 = 14.
       num_core_layers: the radius (except ID 0) of fine-grained 2D attention.
         For example, if the num_core_layers is 1, then we have 9 IDs. 
                -
