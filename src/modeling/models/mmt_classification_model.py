@@ -49,10 +49,6 @@ class MmtClassificationModel(tf.keras.Model):
       raise ValueError('Classification heads should have unique names.')
     assert len(self.classification_heads) > 0, 'At least one head.'
 
-    # TODO(roylu): handle multiple heads.
-    assert len(self.classification_heads) == 1, \
-        'Support single head only currently.'
-
   def call(self,
            word_ids: tf.Tensor,
            segment_ids: Optional[tf.Tensor] = None,
@@ -78,7 +74,6 @@ class MmtClassificationModel(tf.keras.Model):
       outputs[f'{cls_head.name}_logits'] = cls_outputs
 
     return outputs
-
 
   @property
   def checkpoint_items(self):
