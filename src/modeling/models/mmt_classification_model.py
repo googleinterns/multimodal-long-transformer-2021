@@ -20,22 +20,24 @@ from official.nlp.keras_nlp import layers
 
 
 class MmtClassificationModel(tf.keras.Model):
-  """Multimodal Transformer-based classification model.
-
-  Args:
-    encoder: A transformer network. This network should output a
-      sequence output
-    classification_heads: A list of optional head layers to transform on encoder
-      sequence outputs.
-    name: The name of the model.
-
-  """
+  """Multimodal Transformer-based classification model."""
 
   def __init__(self,
                encoder: tf.keras.Model,
                classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
                name: str = 'mmt_classification_model',
                **kwargs):
+  """Instantiates MmtClassificationModel.
+
+    Args:
+      encoder: A transformer network. This network should output a sequence
+        output.
+      classification_heads: A list of optional head layers to transform on
+        encoder sequence outputs.
+      name: The name of the model.
+
+  """
+
     super(MmtClassificationModel, self).__init__(name=name, **kwargs)
     self._config = {
         'encoder': encoder,
