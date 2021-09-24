@@ -12,22 +12,18 @@
 # See the License for the specific language governing permissions and
 
 config_file=$1
-dataset=$2
-inference_name=$3
+input_meta_data=$2
+output_dir=$3
 predict_split=$4
-model_dir=$5
-ckpt_name=$6
+ckpt_path=$5
 
-if [ $# -ne 6 ];
+if [ $# -ne 5 ];
 then
-  echo $0 [config_file] [dataset] [inference_name] [predict_split] [model_dir] [ckpt_name]
+  echo $0 [config_file] [input_meta_data] [output_dir] [predict_split] [ckpt_path]
   exit 1
 fi
 
 batch_size=2048
-output_dir=$model_dir/results/$ckpt_name/$inference_name/$predict_split
-input_meta_data=gs://mmt/$dataset/inference_data/$inference_name/input_meta_data
-ckpt_path=$model_dir/$ckpt_name
 
 TPU_NAME=v3-8-sw25-1
 TPU_ZONE=us-central1-a
