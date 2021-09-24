@@ -27,13 +27,16 @@ name_to_features = {
                                                             allow_missing=True),
 }
 
+# Replace INPUT_FILES and EVAL_DATA_DIR with the actual data folder and your
+# preprocessed data directory.
+
 NUM_SHARDS = 1
 # Uses topk images to generate smaller inference set.
 TOPK_IMAGES = 100
 INPUT_FILES = 'gs://tabletalk-wit/flickr30k/frcnn16j_b16_flickr30k_{}_tf_example.recordio*'
-TFRECORD_BASENAME = '{}/flickr30k.{}.{}.recordio-{:05d}-of-{:05d}'
 EVAL_DATA_DIR = f'gs://mmt/flickr30k/inference_data/{TOPK_IMAGES}i_to_5000t'
 
+TFRECORD_BASENAME = '{}/flickr30k.{}.{}.recordio-{:05d}-of-{:05d}'
 input_meta_data = {'max_seq_length': 512}
 max_num_examples = {
     'val': {'image': 1014, 'text': 5070},

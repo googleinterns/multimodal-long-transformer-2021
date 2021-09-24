@@ -20,15 +20,18 @@ import tensorflow as tf
 
 import utils
 
+# Replace INPUT_FILES and EVAL_DATA_DIR with the actual data folder and your
+# preprocessed data directory.
+
 # `all` configurations.
 INPUT_FILES = 'gs://tabletalk-wit/wit/split/wit_v1.ai.{}.en.recordio-*'
-EVAL_DATA_DIR='gs://mmt/wit/inference_data/all'
+EVAL_DATA_DIR = 'gs://mmt/wit/inference_data/all'
 
 # `old_infernce` configurations.
 # In order to have faster iteration of evaluating models,
 # We take fewer number of examples.
 INPUT_FILES = 'gs://tabletalk-wit/wit/split/wit_v1.ai.{}.en.recordio-0000*'
-EVAL_DATA_DIR='gs://mmt/wit/inference_data/old_inference'
+EVAL_DATA_DIR ='gs://mmt/wit/inference_data/old_inference'
 
 
 def serialize_example(feature):
