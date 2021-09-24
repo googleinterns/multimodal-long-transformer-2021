@@ -27,7 +27,7 @@ from data import retrieval_dataloader
 from tasks import classification
 
 
-def get_recall_at_k_from_dataframe(df, topks=[1, 3, 5, 10]):
+def get_recall_at_k_from_dataframe(df, topks=(1, 3, 5, 10)):
   """Gets recall@k from a dataframe.
 
   The dataframe should contains 4 columns: image_index, text_index,

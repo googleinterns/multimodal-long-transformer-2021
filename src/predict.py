@@ -22,12 +22,10 @@ from absl import app
 from absl import flags
 from absl import logging
 
-import tensorflow as tf
-
-# Imports registered experiment configs.
 from official.core import exp_factory
 from official.core import task_factory
 from official.modeling.hyperparams import params_dict
+import tensorflow as tf
 
 import distribute_utils
 import prediction_helper

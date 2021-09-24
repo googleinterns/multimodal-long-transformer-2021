@@ -113,7 +113,7 @@ class MmtRetrievalDataLoader(data_loader.DataLoader):
 
     drop_remainder = config.drop_remainder
 
-    if config.input_path != '':
+    if config.input_path:
       # Image-text pairs are already provided in records.
       input_patterns = config.input_path.split(',')
       data_utils.check_input_patterns(input_patterns)
@@ -202,7 +202,7 @@ class MmtRetrievalDataLoader(data_loader.DataLoader):
         num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # Shards image pairs after enumerate all possible combinations.
-    if (input_context and input_context.num_input_pipelines > 1):
+    if input_context and input_context.num_input_pipelines > 1:
       dataset = dataset.shard(input_context.num_input_pipelines,
                               input_context.input_pipeline_id)
 
