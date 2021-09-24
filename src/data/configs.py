@@ -28,7 +28,6 @@ class MmtDataConfig(cfg.DataConfig):
   is_training: bool = True
   global_batch_size: int = 256
 
-  use_image_text_matching_label: bool = True
   image_data_field: str = 'image_data'
   text_special_token_field_dict: str = (
       '{"caption_attribution_description": "[ATT]",'
