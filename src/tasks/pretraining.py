@@ -1,11 +1,11 @@
 # Copyright 2021 Google LLC
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     https://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,11 +14,12 @@
 
 """Pretraining Task."""
 
-from typing import Mapping
+from typing import Mapping, Tuple
 
 import dataclasses
 import tensorflow as tf
 
+from absl import logging
 from official.core import base_task
 from official.core import config_definitions as cfg
 from official.core import task_factory
@@ -27,10 +28,15 @@ from official.nlp.data import data_loader_factory
 from official.nlp.modeling import layers
 
 from configs import encoders
+from configs import mmt
 import input_utils
 from modeling import losses
-from configs import mmt
 from modeling import models
+
+
+# For gradient accumulation, the maximum batch size per training step when
+# maximum sequence length `max_seq_len = 256`.
+BATCH_SIZE_PER_REPLICA = 64
 
 
 @dataclasses.dataclass
@@ -70,7 +76,6 @@ class PretrainingTask(base_task.Task):
     cls_heads = []
     for cfg in config.cls_heads:
       cls_heads.append(layers.ClassificationHead(**cfg.as_dict()))
-    cls_labels = input_utils.create_cls_heads_labels(config.cls_heads)
 
     model = models.MmtPretrainingModel(
         encoder=encoder,
@@ -79,7 +84,8 @@ class PretrainingTask(base_task.Task):
         mlm_initializer=config.mlm_initializer,
         mpp_activation=tf_utils.get_activation(config.mpp_activation),
         mpp_initializer=config.mpp_initializer,
-        classification_heads=cls_heads)
+        classification_heads=cls_heads,
+        bind_word_embedding_table=config.bind_word_embedding_table)
 
     inputs.update(encoder_inputs)
     model(**inputs)
@@ -216,14 +222,14 @@ class PretrainingTask(base_task.Task):
             labels['itm_label_weights'])
 
   def train_step(self,
-                 inputs: Mapping[str, tf.Tensor],
+                 inputs: Tuple[Mapping[str, tf.Tensor], Mapping[str, tf.Tensor]],
                  model: tf.keras.Model,
                  optimizer: tf.keras.optimizers.Optimizer,
-                 metrics: tf.keras.metrics.Metric):
+                 metrics: Mapping[str, tf.keras.metrics.Metric]):
     """Does forward and backward pass.
 
     Args:
-      inputs: a dictionary of input tensors.
+      inputs: a pair of dictionaries of input and label tensors.
       model: the model, forward pass definition.
       optimizer: the optimizer for this training step.
       metrics: a nested structure of metrics objects.
@@ -232,7 +238,43 @@ class PretrainingTask(base_task.Task):
       A dictionary of logs.
 
     """
+
+    # Gradient accumulation.
     inputs, labels = inputs
+    accumulated_grads = [tf.zeros_like(var, dtype=tf.float32) 
+                         for var in model.trainable_variables]
+    all_loss = tf.zeros((1,), dtype=tf.float32)
+    batch_size = tf_utils.get_shape_list(inputs['word_ids'])[0]
+    num_small_steps = batch_size // BATCH_SIZE_PER_REPLICA
+
+    for _ in tf.range(num_small_steps):
+      # Take the 1st `BATCH_SIZE_PER_REPLICA` examples.
+      small_inputs = {k: v[:BATCH_SIZE_PER_REPLICA] for k, v in inputs.items()}
+      small_labels = {k: v[:BATCH_SIZE_PER_REPLICA] for k, v in labels.items()}
+
+      loss, grads = self._train_step(small_inputs,
+                                     small_labels,
+                                     model,
+                                     metrics,
+                                     num_small_steps)
+      all_loss += loss[self.loss]
+
+      accumulated_grads = [x + y for x, y in zip(accumulated_grads, grads)]
+
+      # Move the leading part to the end, so the shape is not changed.
+      inputs = {k: tf.concat([v[BATCH_SIZE_PER_REPLICA:],
+                              small_inputs[k]], axis=0)
+                for k, v in inputs.items()}
+      labels = {k: tf.concat([v[BATCH_SIZE_PER_REPLICA:],
+                              small_labels[k]], axis=0)
+                for k, v in labels.items()}
+
+    # Update the model's parameters.
+    optimizer.apply_gradients(zip(accumulated_grads, model.trainable_variables))
+    return {self.loss: all_loss}
+
+  def _train_step(self, inputs, labels, model, metrics, num_small_steps):
+
     with tf.GradientTape() as tape:
       outputs = model(**inputs, training=True)
       # Computes per-replica loss.
@@ -245,23 +287,25 @@ class PretrainingTask(base_task.Task):
         # Scales loss as the default gradients allreduce performs sum inside the
         # optimizer.
         scaled_loss = loss / tf.distribute.get_strategy().num_replicas_in_sync
+      loss = loss / tf.cast(num_small_steps, dtype=loss.dtype)
+
     tvars = model.trainable_variables
     if self.task_config.scale_loss:
       grads = tape.gradient(scaled_loss, tvars)
     else:
       grads = tape.gradient(loss, tvars)
-    optimizer.apply_gradients(list(zip(grads, tvars)))
     self.process_metrics(metrics, labels, outputs)
-    return {self.loss: loss}
+    return {self.loss: loss}, grads
 
-  def validation_step(self,
-                      inputs: Mapping[str, tf.Tensor],
-                      model: tf.keras.Model,
-                      metrics: tf.keras.metrics.Metric):
+  def validation_step(
+      self,
+      inputs: Tuple[Mapping[str, tf.Tensor], Mapping[str, tf.Tensor]],
+      model: tf.keras.Model,
+      metrics: tf.keras.metrics.Metric):
     """Validatation step.
 
     Args:
-      inputs: a dictionary of input tensors.
+      inputs: a pair of dictionaries of input and label tensors.
       model: the keras.Model.
       metrics: a nested structure of metrics objects.
 
@@ -293,3 +337,15 @@ class PretrainingTask(base_task.Task):
 
     """
     return model(**inputs, training=False)
+
+  def initialize(self, model):
+    ckpt_dir_or_file = self.task_config.init_checkpoint
+    if not ckpt_dir_or_file:
+      logging.info('task_config.init_checkpoint is empty. Train from stratch.')
+      return
+    if tf.io.gfile.isdir(ckpt_dir_or_file):
+      ckpt_dir_or_file = tf.train.latest_checkpoint(ckpt_dir_or_file)
+    ckpt = tf.train.Checkpoint(model)
+    status = ckpt.read(ckpt_dir_or_file)
+    status.expect_partial()
+    logging.info(f'Finished loading pretrained checkpoint from {ckpt_dir_or_file}.')
