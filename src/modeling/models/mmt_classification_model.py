@@ -24,7 +24,7 @@ class MmtClassificationModel(tf.keras.Model):
 
   def __init__(self,
                encoder: tf.keras.Model,
-               classification_heads: Optional[List[tf.keras.layers.Layer]] = None,
+               classification_heads: List[tf.keras.layers.Layer],
                name: str = 'mmt_classification_model',
                **kwargs):
   """Instantiates MmtClassificationModel.
@@ -32,8 +32,8 @@ class MmtClassificationModel(tf.keras.Model):
     Args:
       encoder: A transformer network. This network should output a sequence
         output.
-      classification_heads: A list of optional head layers to transform on
-        encoder sequence outputs.
+      classification_heads: A list of head layers to transform on encoder
+        sequence outputs.
       name: The name of the model.
 
   """
@@ -45,11 +45,9 @@ class MmtClassificationModel(tf.keras.Model):
         'name': name,
     }
     self.encoder = encoder
-    self.classification_heads = classification_heads or []
     if len(set([cls.name for cls in self.classification_heads])) != len(
         self.classification_heads):
       raise ValueError('Classification heads should have unique names.')
-    assert len(self.classification_heads) > 0, 'At least one head.'
 
   def call(self,
            word_ids: tf.Tensor,
