@@ -30,7 +30,7 @@ class MmtPretrainingModel(tf.keras.Model):
 
   def __init__(self,
                encoder: tf.keras.Model,
-               mpp_output_num_classes: int = None,
+               mpp_output_num_classes: Optional[int] = None,
                mlm_activation: Optional[Union[Callable, str]] = None,
                mlm_initializer: str = 'glorot_uniform',
                mpp_activation: Optional[Union[Callable, str]] = None,
@@ -54,6 +54,8 @@ class MmtPretrainingModel(tf.keras.Model):
         to a Glorot uniform initializer.
       classification_heads: A list of optional head layers to transform on encoder
         sequence outputs.
+      bind_word_embedding_table: Bind input word embedding layer and output layer
+        of MLM.
       name: The name of the model.
 
     """
