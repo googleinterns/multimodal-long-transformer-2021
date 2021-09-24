@@ -28,7 +28,7 @@ batch_size=2048
 TPU_NAME=v3-8-sw25-1
 TPU_ZONE=us-central1-a
 
-python predict.py \
+python predict3.py \
   --distribution_strategy tpu \
   --tpu $TPU_NAME \
   --tpu_zone $TPU_ZONE \
