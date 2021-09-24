@@ -69,7 +69,7 @@ class MmtPretrainingModel(tf.keras.Model):
         self.classification_heads):
       raise ValueError('Classification heads should have unique names.')
 
-    embedding_layer = self.encoder.get_embedding_layer()
+    embedding_layer = self.encoder.get_word_embedding_layer()
     if bind_word_embedding_table:
       embedding_table = embedding_layer.embedding_table
     else:
