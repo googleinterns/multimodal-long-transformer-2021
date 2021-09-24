@@ -57,32 +57,19 @@ class MmtRetrievalDataLoader(data_loader.DataLoader):
     self._params = params
     self._image_data_field = params.image_data_field
     self._text_special_token_field_dict = json.loads(params.text_special_token_field_dict)
-    self._is_prebuilt_pairs = params.input_path != ''
     self.image_name_to_features = self._image_name_to_features()
     self.text_name_to_features = self._text_name_to_features()
 
   def _image_name_to_features(self):
-    # TODO(roylu): Unify the name of index during preprocessing.
-    if self._is_prebuilt_pairs:
-      index_key = 'image_index'
-    else:
-      index_key = 'index'
-
     name_to_features = {
-        index_key: tf.io.FixedLenFeature([], tf.int64),
+        'image_index': tf.io.FixedLenFeature([], tf.int64),
         self._image_data_field: tf.io.FixedLenFeature([], tf.string)
     }
     return name_to_features
 
   def _text_name_to_features(self):
-    # TODO(roylu): Unify the name of index during preprocessing.
-    if self._is_prebuilt_pairs:
-      index_key = 'text_index'
-    else:
-      index_key = 'index'
-
     name_to_features = {
-        index_key: tf.io.FixedLenFeature([], tf.int64),
+        'text_index': tf.io.FixedLenFeature([], tf.int64),
         'gt_image_index': tf.io.FixedLenFeature([], tf.int64),
     }
     for k in self._text_special_token_field_dict.keys():
@@ -117,10 +104,9 @@ class MmtRetrievalDataLoader(data_loader.DataLoader):
     # This dataloader is currently for prediction only. However, it could be
     # modified for training.
     is_training = config.is_training
-    if config.include_image_text_index:
-      index_keys = ['image_index', 'text_index', 'gt_image_index']
-      input_keys.extend(index_keys)
-      keep_feature_keys.extend(index_keys)
+    index_keys = ['image_index', 'text_index', 'gt_image_index']
+    input_keys.extend(index_keys)
+    keep_feature_keys.extend(index_keys)
 
     batch_size_per_replica = input_context.get_per_replica_batch_size(
         config.global_batch_size)
