@@ -130,10 +130,12 @@ def process_split(split):
       print(f'  Process {i}')
 
   split_input_meta_data = {
-      f"{split}_image_input_path": f'{EVAL_DATA_DIR}/flickr30k.{split}.image.recordio-*',
-      f"{split}_text_input_path": f'{EVAL_DATA_DIR}/flickr30k.{split}.text.recordio-*',
-      f"{split}_num_image_examples": len(image_key_to_index),
-      f"{split}_num_text_examples": len(text_key_to_index),
+      f'{split}_image_input_path':
+        f'{EVAL_DATA_DIR}/flickr30k.{split}.image.recordio-*',
+      f'{split}_text_input_path':
+        f'{EVAL_DATA_DIR}/flickr30k.{split}.text.recordio-*',
+      f'{split}_num_image_examples': len(image_key_to_index),
+      f'{split}_num_text_examples': len(text_key_to_index),
   }
   return split_input_meta_data
 
