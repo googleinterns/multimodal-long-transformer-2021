@@ -74,7 +74,9 @@ def get_decode_fn(name_to_features: Mapping[str, tf.io.FixedLenFeature],
                   merge_dims: bool,
                   is_training: bool,
                   decode_image: bool = True,
-                  decode_text: bool = True):
+                  decode_text: bool = True,
+                  keep_unnormalized_patch_embeddings: bool = True,
+                  use_rand_aug: bool = False):
   """Returns a decode function to parse a single example into Tensors."""
 
   image_size = input_config.image_size
@@ -215,6 +217,8 @@ def get_decode_fn(name_to_features: Mapping[str, tf.io.FixedLenFeature],
       if keep_unnormalized_patch_embeddings:
         example['unnormalized_patch_embeddings'] = im
 
+      norm_im = convert_image_to_patches(norm_im)
+      norm_im = reorder_patches(norm_im, mode=input_config.patch_order)
       example['patch_embeddings'] = norm_im
 
       # Concatenate all input token ids together by the following ordering:
