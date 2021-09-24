@@ -64,7 +64,6 @@ def create_mtm_inputs_and_labels(data_cfg: cfg.DataConfig):
   mlm_max_selections_per_seq = data_cfg.mlm_max_selections_per_seq
   mpp_max_selections_per_seq = data_cfg.mpp_max_selections_per_seq
 
-  inputs, labels = dict(), dict()
   mlm_positions = tf.keras.layers.Input(
       shape=(mlm_max_selections_per_seq,),
       name='mlm_positions',
@@ -90,10 +89,10 @@ def create_mtm_inputs_and_labels(data_cfg: cfg.DataConfig):
       name='mpp_label_weights',
       dtype=tf.int32)
 
-  inputs.update({
+  inputs = {
       'mlm_positions': mlm_positions,
       'mpp_positions': mpp_positions,
-  })
+  }
   labels = {
       'mlm_label_ids': mlm_label_ids,
       'mlm_label_weights': mlm_label_weights,
