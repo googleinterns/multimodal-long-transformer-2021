@@ -26,21 +26,6 @@ class MmtPretrainingModel(tf.keras.Model):
   Adds the Masked Language Modeling (MLM), Masked Patch Prediction (MPP) and
   optional classification heads upon the transformer encoder.
 
-  Args:
-    encoder: A transformer network. This network should output a sequence of 
-      contextualized word embeddings (sequence_output).
-    mlm_activation: The activation (if any) to use in the masked LM network. If
-      None, no activation will be used.
-    mlm_initializer: The initializer (if any) to use in the masked LM. Default
-      to a Glorot uniform initializer.
-    mpp_activation: The activation (if any) to use in the masked PP network. If
-      None, no activation will be used.
-    mpp_initializer: The initializer (if any) to use in the masked PP. Default
-      to a Glorot uniform initializer.
-    classification_heads: A list of optional head layers to transform on encoder
-      sequence outputs.
-    name: The name of the model.
-
   """
 
   def __init__(self,
@@ -54,6 +39,25 @@ class MmtPretrainingModel(tf.keras.Model):
                bind_word_embedding_table: bool = True,
                name: str = 'mmt_pretraining_model',
                **kwargs):
+    """instantiates `MmtPretrainingModel`.
+
+    Args:
+      encoder: A transformer network. This network should output a sequence of 
+        contextualized word embeddings (sequence_output).
+      mlm_activation: The activation (if any) to use in the masked LM network. If
+        None, no activation will be used.
+      mlm_initializer: The initializer (if any) to use in the masked LM. Default
+        to a Glorot uniform initializer.
+      mpp_activation: The activation (if any) to use in the masked PP network. If
+        None, no activation will be used.
+      mpp_initializer: The initializer (if any) to use in the masked PP. Default
+        to a Glorot uniform initializer.
+      classification_heads: A list of optional head layers to transform on encoder
+        sequence outputs.
+      name: The name of the model.
+
+    """
+
     super(MmtPretrainingModel, self).__init__(name=name, **kwargs)
     self._config = {
         'encoder': encoder,
