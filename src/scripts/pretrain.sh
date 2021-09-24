@@ -11,13 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 
-tpu_num=$1
-config_file=$2
-output_dir=$3
+config_file=$1
+output_dir=$2
 
-if [ $# -ne 3 ];
+if [ $# -ne 2 ];
 then
-  echo $0 [tpu_num] [config_file] [output_dir]
+  echo $0 [config_file] [output_dir]
   exit 1
 fi
 
@@ -25,7 +24,7 @@ PARAMS=runtime.distribution_strategy=tpu
 PARAMS=$PARAMS,runtime.mixed_precision_dtype='bfloat16'
 PARAMS=$PARAMS,runtime.enable_xla=True
 
-TPU_NAME=v3-8-sw25-${tpu_num}
+TPU_NAME=v3-8-sw25-1
 TPU_ZONE=us-central1-a
 
 EXPERIMENT=mmt/pretraining

@@ -11,17 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 
-tpu_num=$1
-config_file=$2
-dataset=$3
-inference_name=$4
-predict_split=$5
-model_dir=$6
-ckpt_name=$7
+config_file=$1
+dataset=$2
+inference_name=$3
+predict_split=$4
+model_dir=$5
+ckpt_name=$6
 
-if [ $# -ne 7 ];
+if [ $# -ne 6 ];
 then
-  echo $0 [tpu_num] [config_file] [dataset] [inference_name] [predict_split] [model_dir] [ckpt_name]
+  echo $0 [config_file] [dataset] [inference_name] [predict_split] [model_dir] [ckpt_name]
   exit 1
 fi
 
@@ -30,7 +29,7 @@ output_dir=$model_dir/results/$ckpt_name/$inference_name/$predict_split
 input_meta_data=gs://mmt/$dataset/inference_data/$inference_name/input_meta_data
 ckpt_path=$model_dir/$ckpt_name
 
-TPU_NAME=v3-8-sw25-${tpu_num}
+TPU_NAME=v3-8-sw25-1
 TPU_ZONE=us-central1-a
 
 python predict.py \
