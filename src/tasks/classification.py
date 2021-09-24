@@ -15,7 +15,7 @@
 """Classification task."""
 import collections
 import dataclasses
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple, Mapping
 
 from absl import logging
 import numpy as np
@@ -312,7 +312,7 @@ def predict(task: ClassificationTask,
       return dict(image_index=image_index,
                   text_index=text_index,
                   gt_image_index=gt_image_index,
-                  logits=outputs['logits'])
+                  logits=outputs['itm_logits'])
 
     outputs = strategy.run(_replicated_step, args=(batch,))
     return tf.nest.map_structure(strategy.experimental_local_results, outputs)

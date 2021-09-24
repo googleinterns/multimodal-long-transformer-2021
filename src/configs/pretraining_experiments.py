@@ -17,7 +17,7 @@ from official.core import config_definitions as cfg
 from official.core import exp_factory
 from official.modeling import optimization
 
-from tasks import mtm
+from tasks import pretraining
 from data import pretrain_dataloader
 
 
@@ -51,7 +51,7 @@ _TRAINER = cfg.TrainerConfig(
 def mmt_pretraining() -> cfg.ExperimentConfig:
   """mmt pretraining experiment."""
   config = cfg.ExperimentConfig(
-      task=mtm.MaskedTMConfig(
+      task=pretraining.PretrainingTaskConfig(
           train_data=pretrain_dataloader.MmtPretrainDataConfig(),
           validation_data=pretrain_dataloader.MmtPretrainDataConfig(
               is_training=False)),
