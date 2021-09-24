@@ -96,7 +96,6 @@ class MmtClassificationDataLoader(data_loader.DataLoader):
 
     dataset = tf.data.Dataset.list_files(input_patterns,
                                          shuffle=is_training,
-
                                          seed=config.seed)
     if is_training:
       dataset = dataset.repeat()
@@ -108,7 +107,7 @@ class MmtClassificationDataLoader(data_loader.DataLoader):
         input_files.extend(tf.io.gfile.glob(input_pattern))
       dataset = dataset.shuffle(len(input_files))
 
-    if (input_context and input_context.num_input_pipelines > 1):
+    if input_context and input_context.num_input_pipelines > 1:
       dataset = dataset.shard(input_context.num_input_pipelines,
                               input_context.input_pipeline_id)
 
