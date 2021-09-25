@@ -1,0 +1,83 @@
+task:
+  # Change init_checkpoint to your pretrained checkpoint path on GCS or leave it
+  # as None to train from scratch.
+  init_checkpoint: gs://your_checkpoint_path
+  model:
+    encoder:
+      type: mmt
+      mmt:
+        # Change max_absolute_position_embeddings to the # absolute embedding
+        # used in your ViT.
+        max_absolute_position_embeddings: 578
+        # a
+        relative_att_num_core_layers: 1
+        # b
+        relative_pos_max_distance: 12
+        # b * 2 + 1 + (2 * a + 1) ** 2 + 8 (outer layer in 2d relative position) + 7
+        relative_vocab_size: 49
+    cls_heads:
+      - inner_dim: 768
+        num_classes: 2
+        name: 'itm'
+    # The number of output class for prediction.
+    num_classes: 2
+  train_data:
+    seed: 128
+    cycle_length: 8
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    pos_weight: 1.0
+    is_training: true
+    drop_remainder: true
+    global_batch_size: 512
+    max_seq_len: 256
+    image_data_field: 'image_data'
+    image_key_field: 'image_key'
+    text_special_token_field_dict: '{"caption_attribution_description": "[ATT]", "caption_reference_description":"[REF]"}'
+    tasks: 'itm'
+    negative_positive_ratio: 1
+    label_field: 'itm_label_ids'
+    label_weights_field: 'itm_label_weights'
+    logits_field: 'itm_logits'
+    pos_weights_field: 'itm_pos_weights'
+  validation_data:
+    cycle_length: 8
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    pos_weight: 1.0
+    is_training: false
+    drop_remainder: false
+    global_batch_size: 512
+    max_seq_len: 256
+    image_data_field: 'image_data'
+    image_key_field: 'image_key'
+    text_special_token_field_dict: '{"caption_attribution_description": "[ATT]", "caption_reference_description":"[REF]"}'
+    tasks: 'itm'
+    negative_positive_ratio: 1
+trainer:
+  checkpoint_interval: 5000
+  max_to_keep: 32
+  steps_per_loop: 1000
+  summary_interval: 1000
+  # Training data size 3,467,277 examples after filtering out examples with short
+  # text tokens (less than 6 tokens).
+  # Batch size 512 -> 3,467,277 // 512 = 6772 steps.
+  # train_steps = 6772 (steps per epoch) * 2 (negative_positive_ratio+1) * 10 (epochs)
+  #             = 135,440 steps.
+  train_steps: 135440
+  # 3386 steps = 0.5 epochs
+  validation_interval: 6772
+  validation_steps: -1
+  optimizer_config:
+    learning_rate:
+      polynomial:
+        initial_learning_rate: 0.0001
+        # 10% of train_steps.
+        decay_steps: 135440
+    warmup:
+      polynomial:
+        # 10% of train_steps.
+        warmup_steps: 13544
+  best_checkpoint_export_subdir: 'best_ckpt'
+  best_checkpoint_eval_metric: 'auc'
+  best_checkpoint_metric_comp: 'higher'
