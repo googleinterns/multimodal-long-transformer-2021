@@ -53,6 +53,17 @@ def image_example(image_string, string_dict, int_dict=None):
   return tf.train.Example(features=tf.train.Features(feature=feature))
 
 
+def text_example(string_dict, int_dict=None):
+  feature = dict()
+  for k, v in string_dict.items():
+    feature[k] = _bytes_feature(v)
+
+  if int_dict is not None:
+    for k, v in int_dict.items():
+      feature[k] = _int64_feature(v)
+  return tf.train.Example(features=tf.train.Features(feature=feature))
+
+
 def get_txt_info(txt_info_filename, description_key='description'):
   """Gets metadata of each image_id (image file).
   
@@ -83,3 +94,11 @@ def get_txt_info(txt_info_filename, description_key='description'):
       if i % 10000 == 0:
         print(f'Read txt info: {i}')
   return txt_info
+
+
+def get_parse_single_example_fn(name_to_features):
+
+  def parse_single_example(example_proto):
+    return tf.io.parse_single_example(example_proto, name_to_features)
+
+  return parse_single_example
