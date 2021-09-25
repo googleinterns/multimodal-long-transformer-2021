@@ -11,7 +11,7 @@ pip install requirements.txt
    
 ## Pretraining
 
-1. Use `scripts/pretrain.sh` and an yaml file to pretrain your model.
+1. Use `scripts/pretrain.sh` and a yaml file to pretrain your model.
 2. Remember to set your `TPU_NAME` and `TPU_ZONE` in `scripts/pretrain.sh`.
 
 ```bash
@@ -25,7 +25,7 @@ bash scripts/pretrain.sh ./exp_yamls/pretrain/wit/mlm_itm.yaml gs://my_buckets/m
 
 ## Finetuning
 
-1. Use `scripts/finetune.sh` and an yaml file to finetune your model.
+1. Use `scripts/finetune.sh` and a yaml file to finetune your model.
 2. Remember to set your `TPU_NAME` and `TPU_ZONE` in `scripts/finetune.sh`.
 
 ```bash
