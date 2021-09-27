@@ -1,0 +1,59 @@
+task:
+  model:
+    encoder:
+      type: mmt
+      mmt:
+        relative_att_num_core_layers: 0
+        relative_pos_max_distance: 12
+        relative_vocab_size: 32
+    cls_heads:
+      - inner_dim: 768
+        num_classes: 2
+        name: 'itm'
+  train_data:
+    seed: 128
+    cycle_length: 8
+    deterministic: true
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    is_training: true
+    global_batch_size: 4096
+    max_seq_len: 256
+    image_data_field: 'image_data'
+    image_key_field: 'canonical_doc_id'
+    text_special_token_field_dict: '{"caption_attribution_description": "[ATT]", "caption_reference_description":"[REF]"}'
+    # Use RandAug to augment images.
+    use_rand_aug: true
+    tasks: 'mlm,itm'
+    # MLM only.
+    mpp_fraction_to_mask: 0.0
+  validation_data:
+    cycle_length: 8
+    deterministic: true
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    is_training: false
+    global_batch_size: 256
+    max_seq_len: 256
+    image_data_field: 'image_data'
+    image_key_field: 'canonical_doc_id'
+    text_special_token_field_dict: '{"caption_attribution_description": "[ATT]", "caption_reference_description":"[REF]"}'
+    tasks: 'mlm,itm'
+    # MLM only.
+    mpp_fraction_to_mask: 0.0
+trainer:
+  checkpoint_interval: 1000
+  max_to_keep: 32 
+  steps_per_loop: 100
+  summary_interval: 100
+  train_steps: 40000
+  validation_interval: 2000
+  validation_steps: -1
+  optimizer_config:
+    learning_rate:
+      polynomial:
+        initial_learning_rate: 0.0005
+        decay_steps: 40000
+    warmup:
+      polynomial:
+        warmup_steps: 4000

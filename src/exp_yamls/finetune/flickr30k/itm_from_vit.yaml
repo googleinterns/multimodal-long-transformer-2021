@@ -1,0 +1,81 @@
+task:
+  # Change init_checkpoint to your pretrained checkpoint path on GCS or leave it
+  # as None to train from scratch.
+  init_checkpoint: gs://your_checkpoint_path
+  model:
+    encoder:
+      type: mmt
+      mmt:
+        # Change max_absolute_position_embeddings to the # absolute embedding
+        # used in your ViT.
+        max_absolute_position_embeddings: 578
+        relative_att_num_core_layers: 0
+        relative_pos_max_distance: 12
+        relative_vocab_size: 32
+    cls_heads:
+      - inner_dim: 768
+        num_classes: 2
+        name: 'itm'
+    num_classes: 2
+  train_data:
+    seed: 128
+    cycle_length: 8
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    pos_weight: 1.0
+    is_training: true
+    drop_remainder: true
+    global_batch_size: 512
+    max_seq_len: 256
+    use_image_text_matching_label: true
+    image_data_field: 'image_data'
+    image_key_field: 'image_key'
+    text_special_token_field_dict: '{"caption": "[ATT]"}'
+    tasks: 'itm'
+    negative_positive_ratio: 1
+    label_field: 'itm_label_ids'
+    logits_field: 'itm_logits'
+    label_weights_field: 'itm_label_weights'
+    pos_weights_field: 'itm_pos_weights'
+    # Use RandAug to augment images.
+    use_rand_aug: true
+  validation_data:
+    cycle_length: 8
+    input_path: gs://your_input_data_patterns
+    vocab_filename: gs://your_vocab_path
+    pos_weight: 1.0
+    is_training: false
+    drop_remainder: false
+    global_batch_size: 512
+    use_image_text_matching_label: true
+    image_data_field: 'image_data'
+    image_key_field: 'image_key'
+    text_special_token_field_dict: '{"caption": "[ATT]"}'
+    tasks: 'itm'
+    negative_positive_ratio: 1
+trainer:
+  checkpoint_interval: 283 
+  max_to_keep: 32
+  steps_per_loop: 100 
+  summary_interval: 100
+  # Training data size 144,995 xamples.
+  # Batch size 512 ->  144,995 // 512 = 283 steps.
+  # train_steps = 283 (steps per epoch) * 2 (negative_positive_ratio+1) * 12 (epochs)
+  #             = 6972 (steps)
+  train_steps: 6792 
+  # 283 steps = 1 epochs
+  validation_interval: 283
+  validation_steps: -1
+  optimizer_config:
+    learning_rate:
+      polynomial:
+        initial_learning_rate: 0.00001
+        # 100% of train_steps.
+        decay_steps: 6792
+    warmup:
+      polynomial:
+        # 10% of train_steps.
+        warmup_steps: 679
+  best_checkpoint_export_subdir: 'best_ckpt'
+  best_checkpoint_eval_metric: 'cls_accuracy'
+  best_checkpoint_metric_comp: 'higher'
