@@ -1,18 +1,18 @@
 # Copyright 2021 Google LLC
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     https://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Loads dataset for the Mmt pretraining MTM task."""
+"""Loads dataset for the Mmt pretraining task."""
 import json
 import dataclasses
 from typing import Optional
@@ -35,13 +35,11 @@ class MmtPretrainDataConfig(configs.MmtDataConfig):
   mpp_fraction_to_mask: float = 0.5
   # we set this value to be the same as max_seq_len b/c when applying whole word
   # masking, the number of masked tokens might be larger than the acutally vlaues.
-  mlm_max_selections_per_seq: int = 512
+  mlm_max_selections_per_seq: int = 256
   mpp_max_selections_per_seq: int = 98
   output_channel_bits: int = 3 
   input_channels: int = 3
   use_patch_mask_token_id: bool = False
-  negative_sample_rate: int = 1
-  alternate_mlm_mpp: bool = False
 
 
 @data_loader_factory.register_data_loader_cls(MmtPretrainDataConfig)
@@ -56,16 +54,18 @@ class MmtPretrainDataLoader(data_loader.DataLoader):
 
     """
     self._params = params
-    self._image_key = params.image_key
-    self._text_key_dict = json.loads(params.text_key_dict)
+    self._image_data_field = params.image_data_field
+    self._text_special_token_field_dict = json.loads(params.text_special_token_field_dict)
+    self._image_key_field = params.image_key_field
     self.name_to_features = self._name_to_features()
 
   def _name_to_features(self):
 
     name_to_features = {
-        self._image_key: tf.io.FixedLenFeature([], tf.string)
+        self._image_data_field: tf.io.FixedLenFeature([], tf.string),
+        self._image_key_field: tf.io.FixedLenFeature([], tf.string)
     }
-    for k in self._text_key_dict.keys():
+    for k in self._text_special_token_field_dict.keys():
       name_to_features[k] = tf.io.FixedLenFeature([], tf.string,
                                                   default_value='')
 
@@ -101,6 +101,7 @@ class MmtPretrainDataLoader(data_loader.DataLoader):
                                       preserve_unused_token=True,
                                       token_out_type=tf.int32)
 
+    use_rand_aug = config.use_rand_aug
     is_training = config.is_training
     input_patterns = config.input_path.split(',')
     batch_size_per_replica = input_context.get_per_replica_batch_size(
@@ -134,18 +135,32 @@ class MmtPretrainDataLoader(data_loader.DataLoader):
         num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     if is_training:
-      dataset = dataset.shuffle(100, seed=config.seed)
+      dataset = dataset.shuffle(4096, seed=config.seed)
 
     decode_fn = data_utils.get_decode_fn(self.name_to_features,
-                                          tokenizer,
-                                          config,
-                                          merge_dims=False,
-                                          is_training=is_training)
+                                         tokenizer,
+                                         config,
+                                         merge_dims=False,
+                                         is_training=is_training,
+                                         use_rand_aug=use_rand_aug)
 
     dataset = dataset.map(
         decode_fn,
         num_parallel_calls=tf.data.experimental.AUTOTUNE,
         deterministic=config.deterministic)
+
+    # Removes texts that are too short.
+    def get_filter_fn(skip_short_txt):
+      def filter_fn(ex):
+        if skip_short_txt:
+          keep_txt = ex['num_text_wordpieces'] >= 6
+        else:
+          keep_txt = True
+        return keep_txt
+      return filter_fn
+
+    filter_fn = get_filter_fn(is_training)
+    dataset = dataset.filter(filter_fn)
 
     masking_fn = data_utils.get_masking_fn(tokenizer, config)
     word_ids_fn = data_utils.get_word_ids_fn(config)
@@ -166,8 +181,14 @@ class MmtPretrainDataLoader(data_loader.DataLoader):
         deterministic=config.deterministic)
 
     if 'itm' in tasks:
+      # For pretraining, negative_positive_ratio = 1.
+      max_shift = 1 + config.min_shift
+      # Use enough batch size for creating negative examples.
+      batch_size_in_matching_fn = ((max_shift // batch_size_per_replica + 2) *
+                                   batch_size_per_replica)
       matching_fn = data_utils.get_matching_fn(config, batch_size_per_replica)
-      #TODO(roylu): revisit here. `drop_remainder=False` will raise an issue.
+      # Creates in-batch negatives. Thus, we batch and unbatch.
+      # TODO(roylu): revisit here. `drop_remainder=False` will raise an issue.
       dataset = dataset.batch(batch_size_per_replica, drop_remainder=True)
       dataset = dataset.map(
           matching_fn,
@@ -191,7 +212,7 @@ class MmtPretrainDataLoader(data_loader.DataLoader):
 
     # Makes sure that we will have batches with mixing labels.
     if 'itm' in tasks and is_training:
-      dataset = dataset.shuffle(100, seed=config.seed)
+      dataset = dataset.shuffle(4096, seed=config.seed)
 
     dataset = dataset.map(
         split_features_fn,
