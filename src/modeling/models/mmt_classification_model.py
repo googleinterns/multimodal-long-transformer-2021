@@ -27,7 +27,7 @@ class MmtClassificationModel(tf.keras.Model):
                classification_heads: List[tf.keras.layers.Layer],
                name: str = 'mmt_classification_model',
                **kwargs):
-  """Instantiates MmtClassificationModel.
+    """Instantiates MmtClassificationModel.
 
     Args:
       encoder: A transformer network. This network should output a sequence
@@ -36,7 +36,7 @@ class MmtClassificationModel(tf.keras.Model):
         sequence outputs.
       name: The name of the model.
 
-  """
+    """
 
     super(MmtClassificationModel, self).__init__(name=name, **kwargs)
     self._config = {
@@ -45,6 +45,7 @@ class MmtClassificationModel(tf.keras.Model):
         'name': name,
     }
     self.encoder = encoder
+    self.classification_heads = classification_heads
     if len(set([cls.name for cls in self.classification_heads])) != len(
         self.classification_heads):
       raise ValueError('Classification heads should have unique names.')
@@ -80,10 +81,8 @@ class MmtClassificationModel(tf.keras.Model):
     """Returns a dictionary of items to be additionally checkpointed."""
     items = dict(
         encoder=self.encoder,
+        classification_heads=self.classification_heads
     )
-    for head in self.classification_heads:
-      for key, item in head.checkpoint_items.items():
-        items[f'{head.name}.{key}'] = item
     return items
 
   def get_config(self):

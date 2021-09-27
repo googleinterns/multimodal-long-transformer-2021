@@ -28,13 +28,14 @@ class MmtDataConfig(cfg.DataConfig):
   is_training: bool = True
   global_batch_size: int = 256
 
-  use_image_text_matching_label: bool = True
-  image_key: str = 'image_data'
-  text_key_dict: str = ('{"caption_attribution_description": "[ATT]",'
-                        ' "caption_reference_description":"[REF]"}')
+  image_data_field: str = 'image_data'
+  text_special_token_field_dict: str = (
+      '{"caption_attribution_description": "[ATT]",'
+      ' "caption_reference_description":"[REF]"}')
+  image_key_field: str = 'image_key'
   tasks: str = ''
-  image_size: int = 224
   patch_size: int = 16
+  image_size: int = 224
   patch_order: int = 'raster_scan'
   max_pixel_val: int = 256
   max_seq_len: int = 512
@@ -47,3 +48,8 @@ class MmtDataConfig(cfg.DataConfig):
   label_weights_field: str = None
   logits_field: str = None
   pos_weights_field: str = None
+
+  # Minimum number of index shifting when creating negative examples to avoid
+  # from createing false negatives.
+  min_shift: int = 5
+  use_rand_aug: bool = False

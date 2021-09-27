@@ -190,7 +190,7 @@ def write_results(task, input_meta_data, flags_obj):
   model = task.build_model()
   logging.info(f'Restoring checkpoint from {ckpt_file}.')
   checkpoint = tf.train.Checkpoint(model=model)
-  status = checkpoint.read(ckpt_file).expect_partial()
+  status = checkpoint.read(ckpt_file)
   status.expect_partial().assert_existing_objects_matched()
   logging.info(f'Finished loading pretrained checkpoint from {ckpt_file}.')
 

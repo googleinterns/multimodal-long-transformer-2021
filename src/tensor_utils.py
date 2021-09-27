@@ -42,3 +42,28 @@ def gather_indexes(sequence_tensor, positions):
                                     [batch_size * seq_length, width])
   output_tensor = tf.gather(flat_sequence_tensor, flat_positions)
   return output_tensor
+
+
+def pad_to_max_seq_len(tensor, max_seq_len, axis=0):
+  """Pads id tensor to the match the `max_seq_len`.
+
+  Args:
+    tensor: <int32>[..., seq_len, ...]. A tensor with arbitrary shape.
+    max_seq_len: The maximum sequence length we want to append.
+    axis: the axis to be padded.
+
+  Returns:
+    <int32>[..., max_seq_len, ...].
+  
+  """
+  shape = tf_utils.get_shape_list(tensor)
+  lack_seq_len = max_seq_len - shape[axis]
+  lack_seq_len = tf.convert_to_tensor([lack_seq_len])
+
+  indices = tf.constant([[axis]])
+  updates = tf.pad(lack_seq_len, paddings=[[1, 0]])
+  updates = tf.expand_dims(updates, axis=0)
+  shape = tf.constant([len(shape), 2])
+  paddings = tf.scatter_nd(indices, updates, shape)
+  tensor = tf.pad(tensor, paddings=paddings)
+  return tensor

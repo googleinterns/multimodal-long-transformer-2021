@@ -69,7 +69,6 @@ class MmtEncoderConfig(hyperparams.Config):
 
   # The maximum sequence length that this model might ever be used with;
   # used for absolute position embeddings like BERT.
-  # If set to 0 (the default), we skip absolute position embeddings entirely.
   # If nonzero, inputs larger than this value are not allowed.
   max_absolute_position_embeddings: int = None
 
@@ -93,7 +92,7 @@ class MmtEncoderConfig(hyperparams.Config):
   initializer_range: float = 0.02
 
   # If True, use "pre-activation" order for residual blocks.
-  use_pre_activation_order: bool = False
+  use_pre_activation_order: bool = True
 
   # If True, use one-hot lookup for embedding layers with samller vocab.
   use_one_hot_lookup: bool = True
